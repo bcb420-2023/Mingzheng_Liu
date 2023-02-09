@@ -7,7 +7,7 @@ editor_options:
   markdown: 
     wrap: 72
 ---
- BCB420 Assignment 1 Data Selection and Initial Processing
+ BCB420 Lecture 3 Notes
 ---
 ## Overview
 * where to find expression data? - Gene Expression Omnibus (GEO)
