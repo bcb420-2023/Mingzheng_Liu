@@ -17,54 +17,39 @@ editor_options:
 
 ### Preparation
 We need some tools for downloading the datase from GEO: The GEOmetadb package
-We dowload GEOmetadb through BioManager.
+We download GEOmetadb through BioManager.
 
 ```{r}
 # if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 # if (!requireNamespace("GEOmetadb", quietly = TRUE)) BiocManager::install("GEOmetadb")
-# if (!requireNamespace("ggplot2", quietly = TRUE)) install.packages("ggplot2")
 library(BiocManager)
 library(GEOmetadb)
-library(ggplot2)
 ```
-* GEOmethdb Set-up
-** get the meta data
-** package download the meta data not the expression data
+GEOmethdb Set-up
+* get the meta data
+* package download the meta data not the expression data
 ```{r}
+# Check if the database name GEOmetadb is available
 if(!file.exists('GEOmetadb.sqlite')) getSQLiteFile()
+# The database version
 file.info('GEOmetadb.sqlite')
 
-# connect Geo meta data db
+# connect GEO meta data database by absolute path
 con <- dbConnect(SQLite(),'GEOmetadb.sqlite')
 
-# check out the tables available
-geo_tables <- dbListTables(con)
-geo_tables
-
-# details of an individual table
-dbListFields(con,'gse')
-
-# Run SQL queries
-results <- dbGetQuery(con,'select * from gpl limit 5')
-knitr::kable(head(results[,1:5]), format = "html")
-```
-* Platforms check
-```{r}
-# check out the platforms
-num_platforms <- dbGetQuery(con,'select count(*) from gpl')
-num_platforms
-
-# other informations we can get from another platform GPL table
-dbListFields(con,'gpl')
-
-
-```
-
-```{r}
 ```
 
 ### 1. Select an Expression Data Set
+* find the dataset of interests
 ```{r}
+gse <- GEOquery::getGEO("GSE103923",GSEMatrix=FALSE)
+knitr::kable(data.frame(head(GEOquery::Meta(gse))), format = "html")
+
+current_gpl <- names(GPLList(gse))[1]
+current_gpl_info <- Meta(getGEO(current_gpl))
+current_gpl_info$title
+current_gpl_info$last_update_date
+current_gpl_info$organism
 ```
 
 ### 2. Clean the data and map to HUGO symbols
