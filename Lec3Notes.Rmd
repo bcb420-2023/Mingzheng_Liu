@@ -1,0 +1,239 @@
+---
+title: "BCB420_Assignment"
+author: "Mingzheng liu"
+date: "30/01/2022"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+ BCB420 Lecture 3 Notes
+---
+## Overview
+* where to find expression data? - Gene Expression Omnibus (GEO)
+* tools for mining data - GEOmetadb package
+* different platforms available
+* how to find a dataset od interest?
+
+## Packages required
+Geometadb
+* a package that make querying the metadata describing microarray experiments, platforms, and datasets easier. Especially for R users.
+* Based on a SQLite database; GEO datatypes including:
+** GEO samples (GSM)
+** GEO platforms (GPL)
+** GEO data series (GSE) curated GEO datasets (GDS)
+
+```{r}
+# if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+# if (!requireNamespace("GEOmetadb", quietly = TRUE)) BiocManager::install("GEOmetadb")
+# if (!requireNamespace("ggplot2", quietly = TRUE)) install.packages("ggplot2")
+library(BiocManager)
+library(GEOmetadb)
+library(ggplot2)
+```
+
+### GEOmethdb Set-up
+1. get the meta data
+2. package download the meta dat not the expression data
+
+```{r}
+if(!file.exists('GEOmetadb.sqlite')) getSQLiteFile()
+file.info('GEOmetadb.sqlite')
+
+# connect Geo meta data db
+con <- dbConnect(SQLite(),'GEOmetadb.sqlite')
+
+# check out the tables available
+geo_tables <- dbListTables(con)
+geo_tables
+
+# details of an individual table
+dbListFields(con,'gse')
+
+# Run SQL queries
+results <- dbGetQuery(con,'select * from gpl limit 5')
+knitr::kable(head(results[,1:5]), format = "html")
+```
+
+### Platforms
+How many platforms
+
+```{r}
+num_platforms <- dbGetQuery(con,'select count(*) from gpl')
+num_platforms
+
+# other infos we can get from GPL table
+dbListFields(con,'gpl')
+
+# unique technologies
+uniq_tech <- dbGetQuery(con,'select distinct technology from gpl')
+nrow(uniq_tech)
+
+# print out the result
+knitr::kable(uniq_tech[1:2,], format = "html")
+
+#create table w/ 2 cols so that all data fit on 
+mod_table <- cbind(uniq_tech[1:(nrow(uniq_tech)/2), 1],
+                   uniq_tech[((nrow(uniq_tech)/2)+1):nrow(uniq_tech), 1])
+
+knitr::kable(mod_table, format = "html")
+
+num_uniq_tech <- dbGetQuery(con,'select technology, count(*) from gpl group by technology')
+
+colnames(num_uniq_tech)[2] <- "Num_Platforms"
+```
+
+* Visualization of data
+```{r}
+plot_df <- num_uniq_tech[!is.na(num_uniq_tech$technology),]
+
+p<-ggplot(data=plot_df, aes(technology, Num_Platforms)) +
+  geom_col() + coord_flip()
+p
+```
+
+```{r}
+num_uniq_tech_human <- dbGetQuery(con,'select technology,
+                                  count(*) from gpl 
+                                  where 
+                                  organism = "human" 
+                                  group by technology')
+colnames(num_uniq_tech_human)[2] <- "Num_Platforms"
+
+dim(num_uniq_tech_human)
+```
+
+```{r}
+species_ids <- dbGetQuery(con,'select organism,count(*) 
+                          as num_plat from gpl 
+                          where organism like "%homo%" 
+                          group by organism 
+                          order by num_plat desc')
+
+num_uniq_tech_human <- dbGetQuery(con,'select technology,count(*) 
+                                  as num_plat 
+                                  from gpl 
+                                  where organism = "Homo sapiens" 
+                                  group by technology  
+                                  order by num_plat desc')
+colnames(num_uniq_tech_human)[2] <- "Num_Platforms"
+dim(num_uniq_tech_human)
+```
+
+```{r}
+num_uniq_tech_contain_human <- dbGetQuery(con,'select technology,
+                                          count(*) as num_plat 
+                                          from gpl 
+                                          where 
+                                          organism like "%Homo sapiens%" 
+                                          group by technology 
+                                          order by num_plat desc')
+colnames(num_uniq_tech_contain_human)[2] <- "Num_Platforms"
+dim(num_uniq_tech_contain_human)
+knitr::kable(num_uniq_tech_human, format = "html")
+
+# let’s merge the two sets of results that we have
+# to compare better
+uniq_tech_human <- rbind(data.frame(num_uniq_tech_human, 
+                                    type="human only"),
+                         data.frame(num_uniq_tech_contain_human, 
+                                    type = "contains human"))
+
+ knitr::kable(uniq_tech_human[c(1,2,16,17),], format = "html")
+ 
+ # The original question was “Does the overall distribution change if we look for human only?”
+ # Add the data for non-organism specific query we did initially
+
+uniq_tech <- rbind(uniq_tech_human, data.frame(num_uniq_tech, type = "All species"))
+
+# Create the plot
+p<-ggplot(data=uniq_tech, aes(technology, Num_Platforms, fill=type)) +
+  geom_col(position="dodge") + coord_flip() + 
+  ggtitle("Platforms that contain human vs human only ") + 
+  theme(legend.position="bottom") 
+p
+ 
+```
+Let’s look for datasets that are:
+RNASeq dat
+```{r}
+sql <- paste("SELECT DISTINCT gse.title,gse.gse, gpl.title",
+             "FROM",
+             "  gse JOIN gse_gpl ON gse_gpl.gse=gse.gse",
+             "  JOIN gpl ON gse_gpl.gpl=gpl.gpl",
+             "WHERE",
+             "  gpl.title LIKE '%HiSeq%' ", #<<
+             sep=" ")
+rs <- dbGetQuery(con,sql)
+dim(rs)
+```
+Alternately, use the technology tag
+```{r}
+sql <- paste("SELECT DISTINCT gse.title,gse.gse, gpl.title",
+             "FROM",
+             "  gse JOIN gse_gpl ON gse_gpl.gse=gse.gse",
+             "  JOIN gpl ON gse_gpl.gpl=gpl.gpl",
+             "WHERE",
+             "  gpl.technology = 'high-throughput sequencing' ", #<<
+             sep=" ")
+rs <- dbGetQuery(con,sql)
+dim(rs)
+```
+Let’s look for datasets that are:
+RNASeq data
+human
+```{r}
+sql <- paste("SELECT DISTINCT gse.title,gse.gse, gpl.title",
+             "FROM",
+             "  gse JOIN gse_gpl ON gse_gpl.gse=gse.gse",
+             "  JOIN gpl ON gse_gpl.gpl=gpl.gpl",
+             "WHERE",
+             "  gpl.title LIKE '%HiSeq%' AND ",
+             " gpl.organism = 'Homo sapiens'", #<< 
+             sep=" ")
+rs <- dbGetQuery(con,sql)
+dim(rs)
+
+```
+Let’s look for datasets that are:
+RNASeq data
+human
+dataset from within 5 years
+```{r}
+sql <- paste("SELECT DISTINCT gse.title,gse.gse, gpl.title,",
+             " gse.submission_date",
+             "FROM",
+             "  gse JOIN gse_gpl ON gse_gpl.gse=gse.gse",
+             "  JOIN gpl ON gse_gpl.gpl=gpl.gpl",
+             "WHERE",
+             "  gse.submission_date > '2017-01-01' AND", #<<
+             "  gpl.organism LIKE '%Homo sapiens%' AND",
+             "  gpl.technology LIKE '%high-throughput seq%' ",
+             sep=" ")
+rs <- dbGetQuery(con,sql)
+dim(rs)
+```
+Let’s look for datasets that are:
+RNASeq data
+human
+dataset from within 5 years
+related to ovarian
+```{r}
+sql <- paste("SELECT DISTINCT gse.title,gse.gse, gpl.title,",
+             " gse.submission_date",
+             "FROM",
+             "  gse JOIN gse_gpl ON gse_gpl.gse=gse.gse",
+             "  JOIN gpl ON gse_gpl.gpl=gpl.gpl",
+             "WHERE",
+             "  gse.submission_date > '2017-01-01' AND",
+             "  gse.title LIKE '%ovarian%' AND ", #<<
+             "  gpl.organism LIKE '%Homo sapiens%' AND",
+              "  gpl.technology LIKE '%high-throughput seq%' "
+             ,sep=" ")
+
+rs <- dbGetQuery(con,sql)
+dim(rs)
+
+```
+
+
