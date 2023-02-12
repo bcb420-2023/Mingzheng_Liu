@@ -1,7 +1,7 @@
 ---
-title: "BCB420_Assignment"
+title: "BCB420_Assignment1"
 author: "Mingzheng liu"
-date: "30/01/2022"
+date: "14/02/2022"
 output: html_document
 editor_options: 
   markdown: 
@@ -9,23 +9,25 @@ editor_options:
 ---
  BCB420 Assignment 1 Data Selection and Initial Processing
 ---
-## Overview
+# Overview
 * where to find expression data? - Gene Expression Omnibus (GEO)
 * tools for mining data - GEOmetadb package
 * different platforms available
 * how to find a dataset of interest?
 
-### Preparation
+# Preparation
 We need some tools for downloading the datase from GEO: The GEOmetadb package
 We download GEOmetadb through BioManager.
 
 ```{r}
-# if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-# if (!requireNamespace("GEOmetadb", quietly = TRUE)) BiocManager::install("GEOmetadb")
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 library(BiocManager)
+if (!requireNamespace("GEOmetadb", quietly = TRUE)) BiocManager::install("GEOmetadb")
 library(GEOmetadb)
+# we need knitr to present the data
+library(knitr)
 ```
-GEOmethdb Set-up
+###GEOmethdb Set-up
 * get the meta data
 * package download the meta data not the expression data
 ```{r}
@@ -36,32 +38,51 @@ file.info('GEOmetadb.sqlite')
 
 # connect GEO meta data database by absolute path
 con <- dbConnect(SQLite(),'GEOmetadb.sqlite')
-
 ```
 
-### 1. Select an Expression Data Set
+# 1. Select an Expression Data Set
 * find the dataset of interests
+* Particularly, I am interested in the kidney embryology.
 ```{r}
-gse <- GEOquery::getGEO("GSE103923",GSEMatrix=FALSE)
-knitr::kable(data.frame(head(GEOquery::Meta(gse))), format = "html")
-
+gse <- getGEO("GSE103923",GSEMatrix=FALSE)
+kable(data.frame(head(GEOquery::Meta(gse))), format = "html")
+```
+* information about Platform
+```{r}
 current_gpl <- names(GPLList(gse))[1]
 current_gpl_info <- Meta(getGEO(current_gpl))
 current_gpl_info$title
 current_gpl_info$last_update_date
 current_gpl_info$organism
 ```
+* Get the expression Data
+```{r}
+sfiles = getGEOSuppFiles('GSE103923')
+fnames = rownames(sfiles)
 
-### 2. Clean the data and map to HUGO symbols
+smo_exp = read.delim(fnames[1],header=TRUE,check.names = FALSE)
+
+read.table(fnames[1],header=TRUE,check.names=FALSE,nrows = 1)[1,1:4]
+
+read.table(fnames[1],header=TRUE,check.names=TRUE,nrows = 1)[1,1:4]
+
+kable(ca125_exp[1:15,1:5], format = "html")
+
+```
+
+# 2. Clean the data and map to HUGO symbols
+
+
 ```{r}
 ```
 
-### 3. Apply Normalization
+# 3. Apply Normalization
 ```{r}
 ```
 
-### 4. Interpret, and document
+# 4. Interpret, and document
 ```{r}
 ```
 
+# Reference
 
