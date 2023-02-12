@@ -359,25 +359,32 @@ display: none;
 <div id="bcb420-lecture-3-notes" class="section level2">
 <h2>BCB420 Lecture 3 Notes</h2>
 </div>
-<div id="overview" class="section level2">
-<h2>Overview</h2>
+<div id="overview" class="section level1">
+<h1>Overview</h1>
 <ul>
 <li>where to find expression data? - Gene Expression Omnibus (GEO)</li>
 <li>tools for mining data - GEOmetadb package</li>
 <li>different platforms available</li>
-<li>how to find a dataset od interest?</li>
+<li>how to find a dataset of interest?</li>
 </ul>
 </div>
-<div id="packages-required" class="section level2">
-<h2>Packages required</h2>
-<p>Geometadb * a package that make querying the metadata describing
-microarray experiments, platforms, and datasets easier. Especially for R
-users. * Based on a SQLite database; GEO datatypes including: ** GEO
-samples (GSM) ** GEO platforms (GPL) ** GEO data series (GSE) curated
-GEO datasets (GDS)</p>
-<pre class="r"><code># if (!requireNamespace(&quot;BiocManager&quot;, quietly = TRUE)) install.packages(&quot;BiocManager&quot;)
-# if (!requireNamespace(&quot;GEOmetadb&quot;, quietly = TRUE)) BiocManager::install(&quot;GEOmetadb&quot;)
-# if (!requireNamespace(&quot;ggplot2&quot;, quietly = TRUE)) install.packages(&quot;ggplot2&quot;)
+<div id="packages-required" class="section level1">
+<h1>Packages required</h1>
+<div id="geometadb" class="section level3">
+<h3>Geometadb</h3>
+<ul>
+<li>a package that make querying the metadata describing microarray
+experiments, platforms, and datasets easier. Especially for R
+users.</li>
+<li>Based on a SQLite database; GEO datatypes including: ** GEO samples
+(GSM) ** GEO platforms (GPL) ** GEO data series (GSE) curated GEO
+datasets (GDS)</li>
+</ul>
+<pre class="r"><code>if (!requireNamespace(&quot;BiocManager&quot;, quietly = TRUE)) install.packages(&quot;BiocManager&quot;)
+if (!requireNamespace(&quot;GEOmetadb&quot;, quietly = TRUE)) BiocManager::install(&quot;GEOmetadb&quot;)</code></pre>
+<pre><code>## Setting options(&#39;download.file.method.GEOquery&#39;=&#39;auto&#39;)</code></pre>
+<pre><code>## Setting options(&#39;GEOquery.inmemory.gpl&#39;=FALSE)</code></pre>
+<pre class="r"><code>if (!requireNamespace(&quot;ggplot2&quot;, quietly = TRUE)) install.packages(&quot;ggplot2&quot;)
 library(BiocManager)
 library(GEOmetadb)</code></pre>
 <pre><code>## Loading required package: GEOquery</code></pre>
@@ -401,12 +408,13 @@ library(GEOmetadb)</code></pre>
 ##     Vignettes contain introductory material; view with
 ##     &#39;browseVignettes()&#39;. To cite Bioconductor, see
 ##     &#39;citation(&quot;Biobase&quot;)&#39;, and for packages &#39;citation(&quot;pkgname&quot;)&#39;.</code></pre>
-<pre><code>## Setting options(&#39;download.file.method.GEOquery&#39;=&#39;auto&#39;)</code></pre>
-<pre><code>## Setting options(&#39;GEOquery.inmemory.gpl&#39;=FALSE)</code></pre>
 <pre><code>## Loading required package: RSQLite</code></pre>
-<pre class="r"><code>library(ggplot2)</code></pre>
-<div id="geomethdb-set-up" class="section level3">
-<h3>GEOmethdb Set-up</h3>
+<pre class="r"><code>library(ggplot2)
+library(knitr)</code></pre>
+</div>
+</div>
+<div id="geomethdb-set-up" class="section level1">
+<h1>GEOmethdb Set-up</h1>
 <ol style="list-style-type: decimal">
 <li>get the meta data</li>
 <li>package download the meta dat not the expression data</li>
@@ -437,7 +445,7 @@ dbListFields(con,&#39;gse&#39;)</code></pre>
 ## [16] &quot;variable_description&quot; &quot;contact&quot;              &quot;supplementary_file&quot;</code></pre>
 <pre class="r"><code># Run SQL queries
 results &lt;- dbGetQuery(con,&#39;select * from gpl limit 5&#39;)
-knitr::kable(head(results[,1:5]), format = &quot;html&quot;)</code></pre>
+kable(head(results[,1:5]), format = &quot;html&quot;)</code></pre>
 <table>
 <thead>
 <tr>
@@ -547,9 +555,10 @@ Public on Apr 18 2001
 </tbody>
 </table>
 </div>
-<div id="platforms" class="section level3">
-<h3>Platforms</h3>
-<p>How many platforms</p>
+<div id="platforms" class="section level1">
+<h1>Platforms</h1>
+<div id="how-many-platforms" class="section level3">
+<h3>How many platforms</h3>
 <pre class="r"><code>num_platforms &lt;- dbGetQuery(con,&#39;select count(*) from gpl&#39;)
 num_platforms</code></pre>
 <pre><code>##   count(*)
@@ -568,7 +577,7 @@ uniq_tech &lt;- dbGetQuery(con,&#39;select distinct technology from gpl&#39;)
 nrow(uniq_tech)</code></pre>
 <pre><code>## [1] 18</code></pre>
 <pre class="r"><code># print out the result
-knitr::kable(uniq_tech[1:2,], format = &quot;html&quot;)</code></pre>
+kable(uniq_tech[1:2,], format = &quot;html&quot;)</code></pre>
 <table>
 <thead>
 <tr>
@@ -594,7 +603,7 @@ spotted DNA/cDNA
 mod_table &lt;- cbind(uniq_tech[1:(nrow(uniq_tech)/2), 1],
                    uniq_tech[((nrow(uniq_tech)/2)+1):nrow(uniq_tech), 1])
 
-knitr::kable(mod_table, format = &quot;html&quot;)</code></pre>
+kable(mod_table, format = &quot;html&quot;)</code></pre>
 <table>
 <tbody>
 <tr>
@@ -674,9 +683,9 @@ tissue
 <pre class="r"><code>num_uniq_tech &lt;- dbGetQuery(con,&#39;select technology, count(*) from gpl group by technology&#39;)
 
 colnames(num_uniq_tech)[2] &lt;- &quot;Num_Platforms&quot;</code></pre>
-<ul>
-<li>Visualization of data</li>
-</ul>
+</div>
+<div id="visualization-of-data" class="section level3">
+<h3>Visualization of data</h3>
 <pre class="r"><code>plot_df &lt;- num_uniq_tech[!is.na(num_uniq_tech$technology),]
 
 p&lt;-ggplot(data=plot_df, aes(technology, Num_Platforms)) +
@@ -717,7 +726,7 @@ dim(num_uniq_tech_human)</code></pre>
 colnames(num_uniq_tech_contain_human)[2] &lt;- &quot;Num_Platforms&quot;
 dim(num_uniq_tech_contain_human)</code></pre>
 <pre><code>## [1] 15  2</code></pre>
-<pre class="r"><code>knitr::kable(num_uniq_tech_human, format = &quot;html&quot;)</code></pre>
+<pre class="r"><code>kable(num_uniq_tech_human, format = &quot;html&quot;)</code></pre>
 <table>
 <thead>
 <tr>
@@ -859,7 +868,7 @@ uniq_tech_human &lt;- rbind(data.frame(num_uniq_tech_human,
                          data.frame(num_uniq_tech_contain_human, 
                                     type = &quot;contains human&quot;))
 
- knitr::kable(uniq_tech_human[c(1,2,16,17),], format = &quot;html&quot;)</code></pre>
+kable(uniq_tech_human[c(1,2,16,17),], format = &quot;html&quot;)</code></pre>
 <table>
 <thead>
 <tr>
