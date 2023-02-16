@@ -1,88 +1,331 @@
 ---
 title: "BCB420_Assignment1"
+subtitle: "Data Selection and Initial Processing"
 author: "Mingzheng liu"
-date: "14/02/2022"
-output: html_document
+date: "16/02/2022"
+output: 
+  html_document:
+    number_section: true
 editor_options: 
   markdown: 
     wrap: 72
 ---
- BCB420 Assignment 1 Data Selection and Initial Processing
----
-# Overview
-* where to find expression data? - Gene Expression Omnibus (GEO)
-* tools for mining data - GEOmetadb package
-* different platforms available
-* how to find a dataset of interest?
 
-# Preparation
-We need some tools for downloading the datase from GEO: The GEOmetadb package
-We download GEOmetadb through BioManager.
+## Objective of Assignment 1
+To produce a clean, normalized dataset that will be used for the remaining assignments in this course.
 
-```{r}
-if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+## About the Dataset
+The Hedgehog-GLI pathway is responsible for the development and patterning of various tissues and organs, including the kidney, and its dysregulation can lead to congenital abnormalities and diseases. As a key component of the Hedgehog-GLI signaling pathway, the Smoothened (Smo) protein plays a crucial role in human kidney development, which is involved in the regulation of many developmental processes. In the kidney, the Hedgehog-GLI pathway interacts with the transforming growth factor beta (TGF) signaling pathway, which is another critical regulator of kidney development. Smo has been shown to modulate TGF`&beta`; signaling in the kidney, and its disruption can lead to abnormal kidney development and function. Understanding the role of Smo in these signaling pathways is essential for uncovering the molecular mechanisms underlying normal kidney development and diseases, and could ultimately lead to the development of new therapeutic strategies for kidney disorders.
+
+This dataset has been derived from a scientific article that explores the function of the Hedgehog-GLI signaling pathway in the process of kidney development in human using a group of genetically engineered Foxd1Cre;Smo(flox/-) house mice as a model system. The primary objective of this dataset is to investigate the mRNA content of Foxd1Cre;Smo(flox/-) mutant kidneys, with the aim of gaining a deeper understanding of the molecular mechanisms underlying the developmental defects observed in the kidney.
+
+## Preparation
+Tools are needed for downloading the dataset from Gene Expression Omnibus (GEO) database: 
+
+The GEOmetadb package.
+
+The GEOmetadb is downloaded through BioManager.
+
+The mapping of HUGO symbol requires biomaRt.
+
+The normalization of the data requires edgeR, splines.
+
+The presentation of the data requires knitr and ggplot2.
+
+* Packages used
+```{r message=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
 library(BiocManager)
-if (!requireNamespace("GEOmetadb", quietly = TRUE)) BiocManager::install("GEOmetadb")
+if (!requireNamespace("GEOmetadb", quietly = TRUE)) 
+  BiocManager::install("GEOmetadb")
 library(GEOmetadb)
-# we need knitr to present the data
+if (!requireNamespace("biomaRt", quietly = TRUE)) 
+  BiocManager::install("biomaRt")
+library(biomaRt)
+if (!requireNamespace("edgeR", quietly = TRUE)) 
+  BiocManager::install("edgeR")
+library(edgeR)
+# we need knitr and ggplot2 to present the data
+if (!requireNamespace("knitr", quietly = TRUE))
+  install.packages("knitr")
 library(knitr)
-```
-###GEOmethdb Set-up
-* get the meta data
-* package download the meta data not the expression data
-```{r}
-# Check if the database name GEOmetadb is available
-if(!file.exists('GEOmetadb.sqlite')) getSQLiteFile()
-# The database version
-file.info('GEOmetadb.sqlite')
+if (!requireNamespace("ggplot2", quietly = TRUE))
+  install.packages("ggplot2")
+library(ggplot2)
 
-# connect GEO meta data database by absolute path
-con <- dbConnect(SQLite(),'GEOmetadb.sqlite')
+if (!requireNamespace("splines", quietly = TRUE))
+  install.packages("splines")
+library(splines)
 ```
 
-# 1. Select an Expression Data Set
-* find the dataset of interests
-* Particularly, I am interested in the kidney embryology.
-```{r}
-gse <- getGEO("GSE103923",GSEMatrix=FALSE)
-kable(data.frame(head(GEOquery::Meta(gse))), format = "html")
-```
-* information about Platform
-```{r}
-current_gpl <- names(GPLList(gse))[1]
-current_gpl_info <- Meta(getGEO(current_gpl))
-current_gpl_info$title
-current_gpl_info$last_update_date
-current_gpl_info$organism
-```
-* Get the expression Data
-```{r}
+# The Expression Data Set Selected
+* The dataset I chose is a the dataset that contains the whole kidney isolated RNA-sequence of the Foxd1Cre;Smo(flox/-) mutant and E13.5 wildtype. The accession ID of this dataset is GSE103923.
+* The work for selection of this dataset is documented in my journal.
+
+# Clean the data and map to HUGO symbols
+* In this step, we will preliminary clean the data and mape the gene to the corresponding HUGO symbols
+
+## – Download the data 
+* In this step, I will download the expression data of the Foxd1Cre;Smo(flox/-) model using its accession ID GSE103923 from the GEO database.
+```{r message = FALSE}
 sfiles = getGEOSuppFiles('GSE103923')
 fnames = rownames(sfiles)
 
 smo_exp = read.delim(fnames[1],header=TRUE,check.names = FALSE)
-
-read.table(fnames[1],header=TRUE,check.names=FALSE,nrows = 1)[1,1:4]
-
-read.table(fnames[1],header=TRUE,check.names=TRUE,nrows = 1)[1,1:4]
-
-kable(ca125_exp[1:15,1:5], format = "html")
-
 ```
 
-# 2. Clean the data and map to HUGO symbols
-
-
+* check the table
 ```{r}
+kable(smo_exp[1:10,1:8], format = "html")
+kable(smo_exp[1:10,9:16], format = "html")
+
 ```
 
-# 3. Apply Normalization
+## – Assess the dataset
+Compute overview statistics to assess data quality for the control and test conditions in my dataset.
 ```{r}
+# How many genes do we have measurments for?
+dim(smo_exp)
+colnames(smo_exp)
+```
+* This data set has 8 samples, which are 4 mutants (MUT) and 4 wild types (WT). There are a number of 23337 genes in this data set.
+* The article related to this dataset states that DESeq in R/Bioconductor was used to analyze the data followed a standard pipeline, which involved normalizing the data and comparing the expression levels between the two sample types, to identify differentially regulated genes by normalizing and comparing the expression levels of wild-type and mutant samples.
+* The dataset contains column name like baseMeanA and foldChange. Therefore, the dataset is actually already normalized and possibly cleaned.
+
+### Filter lowly expressed genes 
+* Normally, for the raw data preprocessing, the weakly expressed rows will be removed using edgeR package.
+* Since the dataset contains rows with empty fold change, it is possible that the weakly expressed rows is not removed.
+* I will filter out lowly expressed genes with less than 1 count per million mapped reads in at least 4 samples
+```{r}
+# translate out counts into counts per million 
+# using the edgeR package function cpm
+cpms = cpm(smo_exp[,9:16])
+rownames(cpms) <- smo_exp[,1]
+# get rid of low counts
+keep = rowSums(cpms >1) >=4
+smo_exp_filtered = smo_exp[keep,]
+dim(smo_exp_filtered)
+# Check does that solve some of duplicate issues?
+summarized_gene_counts_filtered <- sort(table(smo_exp_filtered$id), 
+                                        decreasing = TRUE)
+kable(summarized_gene_counts_filtered[which(
+  summarized_gene_counts_filtered>0)[1:10]],format="html")
+# chek how much data we filtered 
+dim(smo_exp_filtered)[1] / dim(smo_exp)[1]
+```
+We can see that no gene counts are larger than 1 in this dataset. About 42% of the data were removed in this filtering.
+
+### Boxplot and Density plots
+I will plot both the boxplots and density plots by each group and the mean of each condition in my dataset.
+```{r message=FALSE, warning=FALSE}
+### Distribution of our data - Boxplot
+data2plot <- log2(cpm(smo_exp_filtered[,9:16]))
+boxplot(data2plot, xlab = "Samples", ylab = "log2 CPM",
+        las = 2, cex = 0.5, cex.lab = 0.5,
+        cex.axis = 0.5, main = "Boxplot of Foxd1Cre;Smo(flox/-) RNASeq Samples")
+#draw the median on each box plot
+abline(h = median(apply(data2plot, 2, median)),
+       col = "green", lwd = 0.6, lty = "dashed")
+
 ```
 
-# 4. Interpret, and document
+* The interquartile range (IQR) of all 8 samples are nearly at the same level, which confirms the fact that this dataset is normalized.
 ```{r}
+### Distribution of our data - Density plot by each of 8 samples
+counts_density <- apply(log2(cpm(smo_exp_filtered[,9:16])),
+                        2, density)
+#calculate the limits across all the samples
+xlim <- 0; ylim <- 0
+for (i in 1:length(counts_density)) {
+      xlim <- range(c(xlim, counts_density[[i]]$x));
+      ylim <- range(c(ylim, counts_density[[i]]$y))
+    }
+    cols <- rainbow(length(counts_density))
+    ltys <- rep(1, length(counts_density))
+    #plot the first density plot to initialize the plot
+    plot(counts_density[[1]], xlim=xlim, ylim=ylim, type="n",
+         ylab="Smoothing density of log2-CPM",
+         cex.lab = 0.85,
+         main="Density plot by 8 samples")
+    #plot each line
+for (i in 1:length(counts_density)) 
+  lines(counts_density[[i]], col=cols[i], lty=ltys[i])
+    #create legend
+    legend("topright", colnames(data2plot),
+           col=cols, lty=ltys, cex=0.75,
+           border ="blue",  text.col = "green4",
+           merge = TRUE, bg = "gray90")
+
+### Distribution of our data - Density plot by mutant and wild type groups
+counts_density2<- apply(log2(cpm(smo_exp_filtered[,9:16])),
+                        2, density)
+#calculate the limits across all the samples
+xlim <- 0; ylim <- 0
+for (i in 1:length(counts_density2)) {
+      xlim <- range(c(xlim, counts_density2[[i]]$x));
+      ylim <- range(c(ylim, counts_density2[[i]]$y))
+    }
+    cols <- rainbow(length(counts_density2))
+    ltys <- rep(1, length(counts_density2))
+    #plot the first density plot to initialize the plot
+    plot(counts_density2[[1]], xlim=xlim, ylim=ylim, type="n",
+         ylab="Smoothing density of log2-provided",
+         cex.lab = 0.85,
+         main="Density plot by Smo(flox/-) mutants and wild type")
+    #plot each line
+for (i in 1:4) lines(counts_density[[i]], col=cols[5], lty=ltys[i])
+for (i in 5:8) lines(counts_density[[i]], col=cols[8], lty=ltys[i])
+    #create legend
+    legend("topright", colnames(data2plot),
+           col= c(cols[5],cols[5],cols[5],cols[5],
+                 cols[8],cols[8],cols[8],cols[8]), 
+           lty=ltys, cex=0.75,
+           border ="blue",  text.col = "green4",
+           merge = TRUE, bg = "gray90")
 ```
+
+* The density plots have a wider high platform which has a peak around 5, it suggests that there are a large number of differentially expressed genes in the dataset, with fold change values that are positively shifted relative to the zero point.
+* The density plots do not show high density at very high or very low fold change values, it further confirms the fact that the data set is normalized and cleaned since there are no indication of the presence of outliers or errors in the data.
+* For the second density plot, this plot does not shows different patterns of fold change distribution between the mutant and wild type conditions, so it suggest that the conditions have a different impact on gene expression or that there are batch effects or other sources of variability in the data.
+
+
+## – Map genes to the HUGO sumbols
+* By examining the id column of the dataset, I found that two type of id is mixed in the id column. One is for the gene symbol used to represent uncharacterized mouse genes. The gene symbol is based on the naming convention established by the Mouse Genome Informatics (MGI) database, which assigns a unique symbol to each identified gene in the mouse genome. The other one is the HUGO symbol I needed.
+* Since the mice were genetically edited to model the human cell, the genes I need to map are likely from both human and mouse database.
+
+### Get the converstion of id and hgnc_symbol
+* In this step, I will find the conversions of id in my dataset and their HUGO symbols.
+* find the convertions between hgnc symbol and MGI id
+```{r}
+# Use the mouse database for "mgi_symbo" to "hgnc_symbol"
+ensembl <- useMart("ensembl")
+ensembl <- useDataset("mmusculus_gene_ensembl",mart=ensembl)
+conversion_stash <- "smo_conversion_mmu.rds"
+
+smo_conversion_mmu <- readRDS(conversion_stash)
+smo_conversion_mmu <- getBM(
+   attributes = c("mgi_symbol","hgnc_symbol"),
+                                 filters = c("mgi_symbol"),
+                                values = smo_exp_filtered$id,
+                                mart = ensembl)
+saveRDS(smo_conversion_mmu, conversion_stash)
+
+# Use the human database for "hgnc_symbol"
+ensembl <- useMart("ensembl")
+ensembl <- useDataset("hsapiens_gene_ensembl",mart=ensembl)
+conversion_stash <- "smo_conversion_sap.rds"
+
+smo_conversion_hsa <- readRDS(conversion_stash)
+smo_conversion_hsa <- getBM(
+  attributes = c("hgnc_symbol","hgnc_symbol"),
+                                 filters = c("hgnc_symbol"),
+                                values = smo_exp_filtered$id,
+                                mart = ensembl)
+saveRDS(smo_conversion_hsa, conversion_stash)
+
+# count the number of mapped gene using two filters
+nrow(smo_conversion_mmu)
+nrow(smo_conversion_hsa)
+
+kable(smo_conversion_mmu[1:5,],type = "html")
+kable(smo_conversion_hsa[1:5,1:2],type = "html")
+```
+* Using the "mgi_symbol" from the mouse database, there are 12036 rows of mapping results, but all of them are mapping to NA value. Hence, the hgnc_symbol have a result of 0 row of conversion.
+* Using the "hgnc_symbol" from the human database, there are 10918 rows of mapping results, and all of them are mapping to a valid hgnc_symbol. Hence, the hgnc_symbol have a result of 10918 rows of conversions.
+* Given the fact that this dataset is performed on genetic engineered mice to model human kidney cells, the presence of uncharacterized mouse genes that cannot be mapped to HUGO symbol is reasonable. The presence of human gene is as expected since the mouse is used as a model of human kidney devleopment.
+
+### Filter out the non-HUGO symbol identifiers
+In this step, I will use only the smo_conversion_hsa I obtained by using human hgnc_symbol filter since the mouse filter has all NA values in hgnc_symbol.
+```{r}
+smo_exp_annot <- subset(smo_exp_filtered, toupper(id) %in% 
+                          smo_conversion_hsa$hgnc_symbol)
+
+kable(smo_exp_annot[1:5,1:5],type = "html")
+
+# Count the missing identifier rows 
+missing_smo_id_count <- nrow(smo_exp_filtered) - nrow(smo_exp_annot) 
+missing_smo_id_count
+nrow(smo_exp_annot)/nrow(smo_exp_filtered)
+```
+* In this step, `r missing_smo_id_count` rows were removed from the dataset, and 80 % of the data were preserved comparing to the last step. 
+
+## – Clean the data
+* In this step, if my dataset contains raw data, I should consider carefully for removing outliers. If I am confident that an error occur during the measurement process, I should remove the outliers.
+* Since this dataset is a normalized and cleaned one, I do not need to perform this step. The density plots for the data also suggest that outliers have been removed.
+
+# Apply Normalization
+## weighted Trimmed Mean of M-values (TMM) normalization
+* In this step, if I have a dataset of raw data, I will need to do a weighted Trimmed Mean of M-values (TMM) normalization to do the count normalization in my raw data since raw RNA-seq counts are often subject to systematic biases, such as differences in library size, sequencing depth, or gene length.
+* This TMM normalization can be done using the edgeR package by a following steps:
+  1. Estimate the library sizes for each sample using the `estimaSizeFactors` function to calculates the scaling factor for each sample based on the total number of counts.
+  2. Apply TMM normalization to the `DGEList` object using the `calcNormFactors` function, which calculates the normalization factors based on the median ratio of the M-values of each gene between two samples after removing the most differentially expressed genes.
+  3. Calculate the normalized counts using the `cpm` function with the argument `normalized.lib.sizes=TRUE`, which scales the counts by the library size normalization factors.
+* Since my dataset has been normalized and cleaned, I will not perform the normalization once more. 
+
+## Final result
+* Requirement: The final result of your notebook needs to be a dataframe with x numeric columns (depending on how many samples you have). All rows should have a unique HUGO symbols, and the HUGO symbols must be defined as rownames of the dataframe.
+
+* Format the final data frame
+```{r}
+smo_exp_final <- smo_exp_annot
+# set the row names
+rownames(smo_exp_final) <- smo_exp_final$id
+# remove excess column
+smo_exp_final <- smo_exp_final[, -c(1,2,3,4,5,6,7,8)]
+#check result
+dim(smo_exp_final)
+colnames(smo_exp_final)
+```
+
+# Interpret, and document
+* Since the dataset contains only normalized data, the interpretation of the data will only based on normalized data. I am not able to do the comparison of pre- and post normalization data.
+
+## Multidimensional Scaling (MDS) Plots
+```{r}
+# Calculate distances and plot MDS
+dist <- dist(t(log2(cpm(smo_exp_final) + 1)))
+plotMDS(dist, 
+        labels=colnames(smo_exp_final), 
+        col=ifelse(grepl("WT",colnames(smo_exp_final)), cols[8], cols[5]), 
+        pch=16, main="Normalized MDS plot of Smo(flox/-) mutants and wild type")
+```
+
+* This MDS plot visualizes the similarities and differences between samples based on their gene expression profiles. The wildtype group is in pink and the mutant group is in cyan.
+* Two groups of wild type and mutant does not overlap, it suggests that the two groups are distinct and that there are significant differences in gene expression between the two groups.
+
+## Dispersion
+* The dispersion measures the degree of biological variability in the data. 
+* There are two types of dispersion as common and tagwise dispersion. Common dispersion calculates a common dispersion value for all genes, while the tagwise method calculates gene-specific dispersions.
+* Dispersion can be visualized using a mean-varian relationship.
+* There are two levels of variations in an RNASeq experiment: 
+  * One of the reasons for variation in the abundance of a given gene is due to the biological causes resulting from the given conditions being compared.
+  * Another cause for variation in gene abundance is due to technical causes, such as measurement error or uncertainty that can be introduced by the sequencing technology used.
+* Since the dataset does not contain raw counts, I am not able to do the BCV plot and mean-variance relationship plot.
+
+## Documentation of the quetsions
+* What are the control and test conditions of the dataset?
+  * The control group is E13.5 wild type, and the test condition is genetically modified mouse model that has introduced Foxd1Cre gene and deleted one copy of the Smo gene.
+
+* Why is the dataset of interest to you?
+  * The data set is interested because they used the genetic engineering method that models the human physiology process in mouse kidney cells that provide insight into the role of Hedgehog-GLI pathway in the kidney development. This research is beneficitial for the development of new therapeutic strategies for conditions like hydronephrosis and hypodysplasia.
+  
+* Were there expression values that were not unique for specific genes? How did you handle these?
+  * The dataset contains only normalized counts which means there are no duplicated values as we observed in section 2.2.1. If a dataset contains duplicate value, I need to check the reson for the present of the duplicate and then decide the solution for handling. If the data value is similar, I can simply remove one or average out the values. I can also keep the duplicates and analyze them separately.
+
+* Were there expression values that could not be mapped to current HUGO symbols?
+  * Yes. There are expression values from the house mouse since this is a mouse model for human physiology process as we discussed in section 2.3.1. 
+  
+* How many outliers were removed?
+  * The dataset contains only normalized counts, and the density plots shows no indication of outliers in the dataset (section 2.2.2). Hence, I am not able to perform the removal of the outliers. 
+  
+* How did you handle replicates?
+  * The dataset contains 4 replicates for each of the mutant and wild type conditions. I only did the quality control for the low-quality row removal and a unwanted variation removal. Since I observered the low-quality data, which is removed as in section 2.2.1.  Another observation is that the dataset contains expression data that is not related to the research question like the mice gene expression data that cannot be mapped to HUGO symbols as I removed in section 2.3.2.
+  
+* What is the final coverage of your dataset?
+  * The final coverage of the gene that preserved is `r nrow(smo_exp_final) / nrow(smo_exp)``.
 
 # Reference
-
+* Rowan CJ, Li W, Martirosyan H, Erwood S, Hu D, Kim YK, Sheybani-Deloui S, Mulder J, Blake J, Chen L, Rosenblum ND. [Hedgehog-GLI signaling in Foxd1-positive stromal cells promotes murine nephrogenesis via TGF`&beta` signaling.] Development 1 July 2018; 145 (13): dev159947. (doi: https://doi.org/10.1242/dev.159947).
+* Law CW, Alhamdoosh M, Su S, Dong X, Tian L, Smyth GK, Ritchie ME (2018). [RNA-seq analysis is easy as 1-2-3 with limma, Glimma and edgeR.] F1000Research, 5, 1408. (https://f1000research.com/articles/5-1408/v3).
+* Evans C, Hardin J, Stoebel DM. [Selecting between-sample RNA-Seq normalization methods from the perspective of their assumptions.] Brief Bioinform. 2018 Sep 28;19(5):776-792. doi: 10.1093/bib/bbx008. PMID: 28334202; PMCID: PMC6171491.
