@@ -9,4 +9,4 @@ repository for bcb420 for mingzheng Liu
 - Associated Jounral Entries:
   - [Assignment 1 Journal](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Assignment-%231-Data-Selection)
   - [Lec 3: Data selection](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/LecNotes/Lec3Notes.html)
-  - [Lec 4: Data cleaning](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/LecNotes/Lec4Notes.html)
+  - [Lec 4: Data cleaning](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/LecNotes/Lec4&5Notes.html)
