@@ -14,7 +14,7 @@ editor_options:
 * Data Exploration: Data standards (MIAME & MINSEQE)
 * Our dataset - A1 help
 * Data Normalization: Why and what to do?
-* Identifier Mapping: BiomaRt example (week5): Identifer mapping is important and the basis for all down stream analysis 
+* Identifier Mapping: BiomaRt example (lecture 5): Identifer mapping is important and the basis for all down stream analysis 
 
 ## Packages required
 ```{r}
@@ -199,37 +199,3 @@ for (i in 1:length(counts_density)) lines(counts_density[[i]], col=cols[i], lty=
 
 ## Define the groups
 
-```{r}
-colnames(ca125_exp)
-#get the 2 and third token from the column names
-samples <- data.frame(lapply(colnames(ca125_exp)[3:22], 
-                             FUN=function(x){unlist(strsplit(x, split = "\\."))[c(2,3)]}))
-colnames(samples) <- colnames(ca125_exp)[3:22]
-rownames(samples) <- c("patients","cell_type")
-samples <- data.frame(t(samples))
-
-#Create our DGEList object to be used by edgeR
-filtered_data_matrix <- as.matrix(ca125_exp_filtered[,3:22])
-rownames(filtered_data_matrix) <- ca125_exp_filtered$ensembl75_id
-d = DGEList(counts=filtered_data_matrix, group=samples$cell_type)
-```
-
-```{r}
-# Calculate the normalization factors
-d = calcNormFac tors(d)
-d$samples[1:5,]
-#get the normalized data
-normalized_counts <- cpm(d)
-# A MDS plot represents the distances between samples
-plotMDS(d, labels=rownames(samples),
-  col = c("darkgreen","blue")[factor(samples$cell_type)])
-```
-
-```{r}
-```
-
-```{r}
-```
-
-```{r}
-```
