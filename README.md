@@ -5,6 +5,7 @@ repository for bcb420 for mingzheng Liu
  Assignment 1
 - [Assignment 1 R Notebook](https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/Assignment1.Rmd)
 - [Assignment 1 HTML Report](https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/Assignment1.html)
+- [Assignment 1 OnlineBrowser](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/Assignment1.html)
 - Associated Jounral Entries:
   - [Assignment 1 Journal]()
   - [Lec 3: Data selection]()
