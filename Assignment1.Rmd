@@ -197,39 +197,47 @@ for (i in 5:8) lines(counts_density[[i]], col=cols[8], lty=ltys[i])
 ### Get the converstion of id and hgnc_symbol
 * In this step, I will find the conversions of id in my dataset and their HUGO symbols.
 * find the convertions between hgnc symbol and MGI id
+* Use the mouse database for "mgi_symbo" to "hgnc_symbol"
 ```{r}
 # Use the mouse database for "mgi_symbo" to "hgnc_symbol"
 ensembl <- useMart("ensembl")
-ensembl <- useDataset("mmusculus_gene_ensembl",mart=ensembl)
+ensembl <- useDataset("mmusculus_gene_ensembl", mart=ensembl)
 conversion_stash <- "smo_conversion_mmu.rds"
-
-smo_conversion_mmu <- readRDS(conversion_stash)
+if (file.exists(conversion_stash)) {
+  smo_conversion_mmu <- readRDS(conversion_stash)
+} else {
 smo_conversion_mmu <- getBM(
    attributes = c("mgi_symbol","hgnc_symbol"),
                                  filters = c("mgi_symbol"),
                                 values = smo_exp_filtered$id,
                                 mart = ensembl)
 saveRDS(smo_conversion_mmu, conversion_stash)
+}
+```
 
+* Use the human database for "hgnc_symbol"
+```{r}
 # Use the human database for "hgnc_symbol"
 ensembl <- useMart("ensembl")
 ensembl <- useDataset("hsapiens_gene_ensembl",mart=ensembl)
 conversion_stash <- "smo_conversion_sap.rds"
-
+if (file.exists(conversion_stash)) {
 smo_conversion_hsa <- readRDS(conversion_stash)
+} else {
 smo_conversion_hsa <- getBM(
   attributes = c("hgnc_symbol","hgnc_symbol"),
                                  filters = c("hgnc_symbol"),
                                 values = smo_exp_filtered$id,
                                 mart = ensembl)
 saveRDS(smo_conversion_hsa, conversion_stash)
+}
 
 # count the number of mapped gene using two filters
 nrow(smo_conversion_mmu)
 nrow(smo_conversion_hsa)
 
-kable(smo_conversion_mmu[1:5,],type = "html")
-kable(smo_conversion_hsa[1:5,1:2],type = "html")
+# kable(smo_conversion_mmu[1:5,],type = "html")
+# kable(smo_conversion_hsa[1:5,1:2],type = "html")
 ```
 * Using the "mgi_symbol" from the mouse database, there are 12036 rows of mapping results, but all of them are mapping to NA value. Hence, the hgnc_symbol have a result of 0 row of conversion.
 * Using the "hgnc_symbol" from the human database, there are 10918 rows of mapping results, and all of them are mapping to a valid hgnc_symbol. Hence, the hgnc_symbol have a result of 10918 rows of conversions.
