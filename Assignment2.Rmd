@@ -1,0 +1,16 @@
+---
+title: "BCB420_Assignment2"
+subtitle: "Differential Gene expression and Preliminary ORA"
+author: "Mingzheng liu"
+date: "07/03/2022"
+output: 
+  html_document:
+    number_section: true
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+## Objective of Assignment 2
+To take the normalized expression data that was created in Assignment #1 and rank th genes according to differential expression. 
+Once the gene list is ranked, a thresholded over-representation analysis is performed to highlight dominant themes in the top set of genes.
+
