@@ -82,7 +82,6 @@ kable(normalized_counts[1:5,5:8], format = "html")
 Step 1: Create a design model to be used for calculating differential expression, 
 Step 2: Perform an analysis of differential expression using the normalized expression data obtained in A1. 
 
-
 ## Step 1: Create a design matrix
 * This dataset has only one factor, the Smo knockout mutant type.
 * The control will be the wild-type samples.
@@ -281,7 +280,7 @@ current_heatmap
 * The heatmap does has a clear clustering of gene expression values that are either up-regulated genes or the down-regulated genes, which suggests a evidence of differentially expressed genes.
 
 # Thresholded over-representation analysis
-run a thresholded gene set enrichment analysis (GSEA) with your significantly up-regulated and down-regulated set of genes using the g:Profiler.
+Run a thresholded gene set enrichment analysis (GSEA) with your significantly up-regulated and down-regulated set of genes using the g:Profiler.
 
 ## Preparation of up-regulated and down-regulated 
 ```{r prepare genes}
@@ -294,15 +293,23 @@ downregulated_genes <- downregulated$gene
 ```
 
 ## Perform gene set enrichment analysis
+* Use the gprofiler2 function to perform gene set enrichment analysis
+* Note that we were using the organism = mmusculus instead of hsapiens, given that the gene data is collected from house mice
+
 ```{r GSEA}
-# Use the gprofiler2 function to perform gene set enrichment analysis
-# note that we were using the organism = hsapiens insted of 
+# analyze for all differentially expressed genes
+enrich <- gost(query = output_hits$gene, organism = "mmusculus", 
+                           ordered_query = TRUE, 
+                     measure_underrepresentation = TRUE, 
+                     correction_method = "fdr",
+                     sources = c("GO:BP", "REAC", "WP"))
+# analyze for up-regulated differentially expressed genes
 enrich_upreg <- gost(query = upregulated_genes, organism = "mmusculus", 
                            ordered_query = TRUE, 
                      measure_underrepresentation = TRUE, 
                      correction_method = "fdr",
                      sources = c("GO:BP", "REAC", "WP"))
-
+# analyze for down-regulated differentially expressed genes
 enrich_downreg <- gost(downregulated_genes, organism = "mmusculus", 
                            ordered_query = TRUE, 
                      measure_underrepresentation = TRUE, 
@@ -310,44 +317,90 @@ enrich_downreg <- gost(downregulated_genes, organism = "mmusculus",
                      sources = c("GO:BP", "REAC", "WP"))
 ```
 
-```{r GSEA interetation}
+```{r GSEA intepretation}
 # extract the enriched gene sets with a p-value < 0.05
+enriched <- enrich$result[enrich$result$p_value < 0.05, ]
 enriched_upreg <- enrich_upreg$result[enrich_upreg$result$p_value < 0.05, ]
 enriched_downreg <- enrich_downreg$result[enrich_downreg$result$p_value < 0.05, ]
-
-knitr::kable(head(enriched_upreg, 10), format = "html")
-knitr::kable(head(enriched_downreg, 10), format = "html")
+```
+```{r top 5 genesets}
+# inspect top 5
+knitr::kable(head(enriched, 5), format = "html")
+knitr::kable(head(enriched_upreg, 5), format = "html")
+knitr::kable(head(enriched_downreg, 5), format = "html")
+```
+```{r top 1 from all 3 sources}
+# inspect top one from three data sources for all genes
+knitr::kable(rbind(enriched[enriched$source == "GO:BP",][1,9:13],
+                   enriched[enriched$source == "REAC",][1,9:13],
+                   enriched[enriched$source == "WP",][1,9:13]),
+             format = "html")
 
 # inspect top one from three data sources for upregulated genes
-knitr::kable(rbind(enriched_upreg[enriched_upreg$source == "GO:BP",][1,],
-                   enriched_upreg[enriched_upreg$source == "REAC",][1,],
-                   enriched_upreg[enriched_upreg$source == "WP",][1,]),
+knitr::kable(rbind(enriched_upreg[enriched_upreg$source == "GO:BP",][1,9:13],
+                   enriched_upreg[enriched_upreg$source == "REAC",][1,9:13],
+                   enriched_upreg[enriched_upreg$source == "WP",][1,9:13]),
              format = "html")
 
 # inspect top one from three data sources for downregulated genes
-knitr::kable(rbind(enriched_downreg[enriched_downreg$source == "GO:BP",][1,],
-                   enriched_downreg[enriched_downreg$source == "REAC",][1,],
-                   enriched_downreg[enriched_downreg$source == "WP",][1,]),
+knitr::kable(rbind(enriched_downreg[enriched_downreg$source == "GO:BP",][1,9:13],
+                   enriched_downreg[enriched_downreg$source == "REAC",][1,9:13],
+                   enriched_downreg[enriched_downreg$source == "WP",][1,9:13]),
              format = "html")
 ```
+The top term returned in each data source for all genes:
+* GO:BP: biological_process
+* REAC: Classical antibody-mediated complement activation
+* WP: Fatty acid omega-oxidation
+
+The top term returned in each data source for both up and down regulated genes:
+* GO:BP: biological_process
+* REAC: REACTOME root term	
+* WP: WIKIPATHWAYS
+
 ## Visual Representation of the GSEA results 
-```{r enriched_upreg, out.width = "90%", echo = FALSE, fig.cap="Figure 5. Manhattan plot displaying the distribution of the top terms from each data source for upregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of GP:BP terms compared to REAC and WP, and terms of RNA processing, biological_process, Metabolism, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
-# Generate a Manhattan plot to visualize the distribution of the top terms from each data source.
+```{r enriched_upreg, out.width = "90%", echo = FALSE, fig.cap="Figure 5. Manhattan plot displaying the distribution of the top genesets from each data source for upregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of GP:BP genesets is returned compared to REAC and WP, and the genesets of RNA processing, biological_process, Metabolism, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
+# Generate a Manhattan plot to visualize the distribution of the top genesets from each data source.
 gostplot(enrich_upreg) %>% plotly::layout(title = "Manhattan plot for Upregulated genes", font = list(size = 10))
 ```
 
-```{r enriched_downreg, out.width = "90%", echo = FALSE, fig.cap="Figure 6. Manhattan plot displaying the distribution of the top terms from each data source for downregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of REAC terms compared to GP:BP and WP, and terms of biological_process, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
-# Generate a Manhattan plot to visualize the distribution of the top terms from each data source.
+```{r enriched_downreg, out.width = "90%", echo = FALSE, fig.cap="Figure 6. Manhattan plot displaying the distribution of the top genesets from each data source for downregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of REAC genesets is returned compared to GP:BP and WP, and genesets of biological_process, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
+# Generate a Manhattan plot to visualize the distribution of the top genesets from each data source.
 gostplot(enrich_downreg) %>% plotly::layout(title = "Manhattan plot for Downregulated genes", font = list(size = 10))
 ```
 
 ## Thresholded over-representation analysis
 1. Which method did you choose and why?
+* The method used is the g:Profiler for the over-representation analysis since we have use it during the lecture. g:Profiler supports a wide range of annoatation sources, including Gene Ontology (GO), KEGG pathways, Reactome, WikiPathways. This allows for comprehensive analysis and interpretation of genes. g:Profiler is also continuously updated, which ensures that the analysis is based on the most up-to-date and relevant information.
+
 2. What annotation data did you use and why? What version of the annotation are you using?
+* Three sources of annotations, Gene Ontology Biological Process (GO:BP), Reactome (REAC), and WikiPathways (WP) are used for this analysis. The organism is specified as "mmusculus", since the analysis is being performed on mouse genes for simulating human physiology process. The version of the annotation database is  the most current version available at the time of running the analysis, as the gost function retrieves annotation data from the g:Profiler web service, which is regularly updated.
+
 3. How many genesets were returned with what thresholds?
+``` {r counts}
+nrow(enriched)
+nrow(enriched_upreg)
+nrow(enriched_downreg)
+```
+* The threshold used is p < 0.05. 
+* For all genesets, 107 genesets were return. 
+* For the upregulated genes, 69 genesets were returned.
+* For the downregulated genes, 31 genesets were returned.
+
 4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes together vs. the up-regulated and down regulated differentially expressed genes separately)?
+* The results performed on the up-regulated set of genes, and the down-regulated set of genes provided a more clear insight into the biological processes that are specifically affected by each group of genes. The number of gene sets of the upregulated genes is more than the downregulated genes, which indicates more biological processes or pathways are overrepresented among the upregulated genes compared to the downregulated genes. 
+*For example, if a gene set related to cell proliferation is enriched in the upregulated genes and a gene set related to cell cycle arrest is enriched in the downregulated genes, it suggests that the upregulated genes may be involved in promoting cell proliferation, while the downregulated genes may be involved in inhibiting cell cycle progression.
+
+
+
+
+
+
 
 # Interpretation
 1. Do the over-representation results support conclusions or mechanism discussed in the original paper?
+*  In our dataset, the Smo protein is the receptor of the Hedgehog signaling which responsible for the regulating the branching and growth of the urinary buds. 
+
 2. Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your results.
-# Reference
+
+# References
