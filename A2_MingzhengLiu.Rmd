@@ -1,0 +1,172 @@
+---
+title: "BCB420_Assignment2"
+subtitle: "Differential Gene expression and Preliminary ORA"
+author: "Mingzheng liu"
+date: "07/03/2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
+  html_notebook:
+    toc: yes
+    toc_depth: 2
+  pdf_document:
+    fig_caption: yes
+bibliography: A2.bib
+always_allow_html: yes
+---
+## Objective of Assignment 2
+To take the normalized expression data that was created in Assignment #1 and rank the genes according to differential expression. 
+Once the gene list is ranked, a thresholded over-representation analysis is performed to highlight dominant themes in the top set of genes.
+## Preparation
+Tools are needed for a differential expression analysis and a threshold over-representation analysis for our normalized dataset created in Assignment 1: 
+
+The GEOmetadb package.
+
+The GEOmetadb is downloaded through BioManager.
+
+The mapping of HUGO symbol requires biomaRt.
+
+The normalization of the data requires edgeR, splines.
+
+The presentation of the data requires knitr and ggplot2.
+
+* Packages used
+```{r message=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+library(BiocManager)
+if (!requireNamespace("GEOmetadb", quietly = TRUE)) 
+  BiocManager::install("GEOmetadb")
+library(GEOmetadb)
+if (!requireNamespace("biomaRt", quietly = TRUE)) 
+  BiocManager::install("biomaRt")
+library(biomaRt)
+if (!requireNamespace("edgeR", quietly = TRUE)) 
+  BiocManager::install("edgeR")
+library(edgeR)
+if (!requireNamespace("circlize", quietly = TRUE))
+    install.packages("circlize")
+library(circlize)
+if (!requireNamespace("ComplexHeatmap", quietly = TRUE))
+    BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
+if (!requireNamespace("gprofiler2", quietly = TRUE))
+    BiocManager::install("gprofiler2")
+library(gprofiler2)
+# we need knitr and ggplot2 to present the data
+if (!requireNamespace("knitr", quietly = TRUE))
+  install.packages("knitr")
+library(knitr)
+if (!requireNamespace("ggplot2", quietly = TRUE))
+  install.packages("ggplot2")
+library(ggplot2)
+
+if (!requireNamespace("splines", quietly = TRUE))
+  install.packages("splines")
+library(splines)
+
+if (!requireNamespace("GEOquery", quietly = TRUE))
+  BiocManager::install("GEOquery")
+library(GEOquery)
+if (!requireNamespace("Biobase", quietly = TRUE))
+  BiocManager::install("Biobase")
+library(Biobase)
+if (!requireNamespace("dplyr", quietly = TRUE))
+  install.packages("dplyr")
+library(dplyr)
+if (!requireNamespace("kableExtra", quietly = TRUE))
+  install.packages("kableExtra")
+library(kableExtra)
+```
+
+## Prepare dataset from Assignment 1
+The result dataset from assignment 1 is stored in our root directory as "smo_exp_final.txt"
+```{r}
+# Retreive the Assignment 1 result dataset
+normalized_counts <- read.table("smo_exp_normalized.txt")
+# Inspect the dataset
+kable(normalized_counts[1:5,1:4], format = "html")
+kable(normalized_counts[1:5,5:8], format = "html")
+```
+# Differential Gene Expression
+Perform an analysis of differential expression using the normalized expression data obtained in A1. 
+Create a design model to be used for calculating differential expression, 
+* refer back to the MDS plot from A1 to show which factors included in my model.
+
+## Create a design matrix
+* This dataset has only one factor, the smo knockout mutant type.
+* The control will be the wild-type samples.
+```{r}
+# define the groups
+samples <- data.frame(
+  lapply(colnames(normalized_counts), FUN=function(x) {
+    if (grepl("MUT", x)) {
+      # If the column name contains "MUT", extract the characters following "MUT"
+      "MUT"
+    } else if (grepl("WT", x)) {
+      # If the column name contains "WT", extract the characters following "WT"
+      "WT"
+    }
+  })
+)
+colnames(samples) <- colnames(normalized_counts)
+rownames(samples) <- c("genotype")
+samples <- data.frame(t(samples))
+samples[1:8,]
+```
+```{r}
+# create a design matrix of a linear model
+design <- model.matrix(~ samples$genotype)
+# inspect
+kable(design[1:5,], type ="html")
+```
+```{r}
+expressionMatrix <- as.matrix(normalized_counts[,1:8])
+rownames(expressionMatrix) <- 
+  rownames(normalized_counts)
+colnames(expressionMatrix) <- 
+  colnames(normalized_counts)[1:8]
+minimalSet <- ExpressionSet(assayData=expressionMatrix)
+
+# Fit linear model
+fit <- lmFit(normalized_counts, design)
+
+# Calculate differential expression
+
+fit2 <- eBayes(fit, trend=TRUE)
+results <- topTable(fit2,  
+                   coef=ncol(design),
+                   adjust.method = "BH",
+                   number = nrow(expressionMatrix))
+# merge hgnc names to topfit table
+output_hits <- merge(rownames(normalized_counts),
+                     results,
+                     by.y=0,by.x=1,
+                     all.y=TRUE)
+# sort by pvalue
+output_hits <- output_hits[order(output_hits$P.Value),]
+kable(output_hits[1:5,1:7],type="html",row.names = FALSE)
+
+# How many gene pass the threshold p-value < 0.05?
+length(which(output_hits$P.Value < 0.05))
+
+# How many genes pass correction (multipole hypothesis testing) ?
+length(which(output_hits$adj.P.Val < 0.05))
+```
+```{r}
+# Generate MA plot
+plotMA(fit2, main = "MA plot")
+
+# Generate heatmap of top hits
+top_hits <- rownames(results)[1:50]
+heatmap(normalized_counts[top_hits,], scale = "row", main = "Heatmap of Top Hits")
+```
+
+
+# Thresholded over-representation analysis
+
+# Interpretation
+
+# Reference
