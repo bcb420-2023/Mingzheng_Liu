@@ -13,7 +13,7 @@ output:
     toc_depth: 2
   pdf_document:
     fig_caption: yes
-bibliography: A2.bib
+bibliography: A2_MingzhengLiu.bib
 always_allow_html: yes
 ---
 ## Objective of Assignment 2
@@ -33,7 +33,7 @@ The normalization of the data requires edgeR, splines.
 The presentation of the data requires knitr and ggplot2.
 
 * Packages used
-```{r message=FALSE}
+```{r Repare packages, message=FALSE}
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 library(BiocManager)
@@ -62,11 +62,9 @@ library(knitr)
 if (!requireNamespace("ggplot2", quietly = TRUE))
   install.packages("ggplot2")
 library(ggplot2)
-
 if (!requireNamespace("splines", quietly = TRUE))
   install.packages("splines")
 library(splines)
-
 if (!requireNamespace("GEOquery", quietly = TRUE))
   BiocManager::install("GEOquery")
 library(GEOquery)
@@ -83,7 +81,7 @@ library(kableExtra)
 
 ## Prepare dataset from Assignment 1
 The result dataset from assignment 1 is stored in our root directory as "smo_exp_final.txt"
-```{r}
+```{r retrieve dataset}
 # Retreive the Assignment 1 result dataset
 normalized_counts <- read.table("smo_exp_normalized.txt")
 # Inspect the dataset
@@ -91,14 +89,28 @@ kable(normalized_counts[1:5,1:4], format = "html")
 kable(normalized_counts[1:5,5:8], format = "html")
 ```
 # Differential Gene Expression
-Perform an analysis of differential expression using the normalized expression data obtained in A1. 
-Create a design model to be used for calculating differential expression, 
-* refer back to the MDS plot from A1 to show which factors included in my model.
+Step 1: Create a design model to be used for calculating differential expression, 
+Step 2: Perform an analysis of differential expression using the normalized expression data obtained in A1. 
 
-## Create a design matrix
-* This dataset has only one factor, the smo knockout mutant type.
+
+## Step 1: Create a design matrix
+* This dataset has only one factor, the Smo knockout mutant type.
 * The control will be the wild-type samples.
-```{r}
+* inspect our dataset and refer back to the MDS plot from A1 to show which factors included in my model.
+```{r MDS plot, out.width = "90%", echo = FALSE, fig.cap="Figure 1. Multidimensional Scaling (MDS) plot showing the clustering of samples based on gene expression data. Each point represents a sample, colored according to the treatment group, cyan = Smo-knockout (MUT), pink = wild type (WT). The plot reveals clear separation of the knockout and wild type samples, indicating significant differences in gene expression between the two groups."}
+# Calculate distances and plot MDS
+dist <- dist(t(log2(cpm(normalized_counts) + 1)))
+plotMDS(dist, 
+        labels=colnames(normalized_counts), 
+        col=ifelse(grepl("WT",colnames(normalized_counts)), "#00FFFF", "#FF00BF"), 
+        pch=16)
+
+```
+
+### Create design matrix with genotype factor
+* use a linear model.
+* The genotype factor represents the two different types of samples (Smo-knockout and wild type).
+```{r design matrix}
 # define the groups
 samples <- data.frame(
   lapply(colnames(normalized_counts), FUN=function(x) {
@@ -111,62 +123,130 @@ samples <- data.frame(
     }
   })
 )
+# set row and column names
 colnames(samples) <- colnames(normalized_counts)
 rownames(samples) <- c("genotype")
 samples <- data.frame(t(samples))
+#inspect
 samples[1:8,]
-```
-```{r}
+
 # create a design matrix of a linear model
 design <- model.matrix(~ samples$genotype)
 # inspect
-kable(design[1:5,], type ="html")
+kable(design[2:7,], type ="html")
 ```
+
+### check assumption
+* perform diagnostic Mean-Variance plot for our dataset
+* Verify the assumption that our dataset to be negative-binomially distributed to use a linear model
+```{r MV plot, out.width = "90%", echo = FALSE, fig.cap="Figure 2. Mean-variance plot showing the distribution of data. The dispersion and variance of the data  follows the negative binomial distribution, in which the raw data and the blue negative binomial line alligns."}
+
+# create a DGEList object
+dge <- DGEList(counts = normalized_counts, group = factor(rep(c("MUT", "WT"), each = 4)))
+
+# filter low-expressed genes
+keep <- rowSums(cpm(dge) > 1) >= 2
+dge <- dge[keep,]
+
+# normalize data
+dge <- calcNormFactors(dge)
+
+# estimate dispersion
+dge <- estimateDisp(dge)
+
+# estimate tagwise dispersion
+tagwise_disp <- estimateTagwiseDisp(dge)
+
+# generate MV plot
+plotMeanVar(dge, 
+            show.raw.vars = TRUE,
+            show.tagwise.vars = TRUE,
+            NBline = TRUE,
+            show.ave.raw.vars = TRUE,
+            show.binned.common.disp.vars = TRUE,
+            main = "Mean-Variance Plot for Gene Expression Dataset")
+
+# add legend
+legend("topleft", 
+       legend=c("Raw Data", "Tagwise Dispersion", "Average Raw Variances", 
+                "Binned Common Dispersion", "Negative Binomial Line"), 
+       col = c("grey", "lightblue", "maroon", "red", "dodgerblue2"), pch=c(1,1,4,4,NA), lty=c(0,0,0,0,1), lwd=c(1,1,1,1,2), cex=0.6)
+
+```
+
+## Step 2: Differential Expression Analysis
+
+1. Calculate p-values for each of the genes in your expression set. How many genes were significantly differentially expressed? What thresholds did you use and why?
 ```{r}
+# create a matrix 
 expressionMatrix <- as.matrix(normalized_counts[,1:8])
-rownames(expressionMatrix) <- 
-  rownames(normalized_counts)
-colnames(expressionMatrix) <- 
-  colnames(normalized_counts)[1:8]
+# Set row and column names
+rownames(expressionMatrix) <- rownames(normalized_counts)
+colnames(expressionMatrix) <- colnames(normalized_counts)[1:8]
+# Create a minimal ExpressionSet object to use with limma
 minimalSet <- ExpressionSet(assayData=expressionMatrix)
 
-# Fit linear model
+# Fit a linear model
 fit <- lmFit(normalized_counts, design)
 
-# Calculate differential expression
-
+# Use eBayes to estimate the posterior distribution of log-fold changes
+# and calculate moderated t-statistics for each gene
 fit2 <- eBayes(fit, trend=TRUE)
+
+# Get the top differentially expressed genes
 results <- topTable(fit2,  
                    coef=ncol(design),
                    adjust.method = "BH",
                    number = nrow(expressionMatrix))
-# merge hgnc names to topfit table
+
+# merge gene ids to topfit table
 output_hits <- merge(rownames(normalized_counts),
                      results,
                      by.y=0,by.x=1,
                      all.y=TRUE)
-# sort by pvalue
+# sort by p-value
 output_hits <- output_hits[order(output_hits$P.Value),]
+
+# inspect
 kable(output_hits[1:5,1:7],type="html",row.names = FALSE)
 
-# How many gene pass the threshold p-value < 0.05?
+# calculate the number of gene pass the threshold p-value < 0.05
 length(which(output_hits$P.Value < 0.05))
+```
+* We can observe that 1027 genes pass the threshold p-value < 0.05.
+* A threshold of p-value < 0.05 is used to determine significant differential expression. This is a commonly used threshold in statistical analysis, as it indicates that there is less than a 5% chance that the observed differences in gene expression are due to random chance. 
 
+2. Multiple hypothesis testing - correct your p-values using a multiple hypothesis correction method. Which method did you use? And Why? How many genes passed correction?
+```{r}
 # How many genes pass correction (multipole hypothesis testing) ?
 length(which(output_hits$adj.P.Val < 0.05))
 ```
+* The choice of multiple hypothesis testing method will be the Benjamini-Hochberg method to controls the false discovery rate (FDR) given that it the gene expression data of the whole cell and genes are independent or weakly correlated.  Benjamini-Hochberg method are appropriate for controlling the FDR in large-scale hypothesis testing.
+* 49 genes passed this correction.
+
+3. Show the amount of differentially expressed genes using an MA Plot or a Volcano plot. Highlight genes of interest.
 ```{r}
+gene_of_interest <- "Smo"
+
 # Generate MA plot
 plotMA(fit2, main = "MA plot")
-
-# Generate heatmap of top hits
-top_hits <- rownames(results)[1:50]
-heatmap(normalized_counts[top_hits,], scale = "row", main = "Heatmap of Top Hits")
 ```
 
+4. Visualize your top hits using a heatmap. Do you conditions cluster together? Explain why or why not.
+
+```{r}
+
+```
 
 # Thresholded over-representation analysis
+run a thresholded gene set enrichment analysis with your significantly up-regulated and down-regulated set of genes 
+
+1. Which method did you choose and why?
+2. What annotation data did you use and why? What version of the annotation are you using?
+3. How many genesets were returned with what thresholds?
+4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes together vs. the up-regulated and down regulated differentially expressed genes separately)?
 
 # Interpretation
-
+1. Do the over-representation results support conclusions or mechanism discussed in the original paper?
+2. Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your results.
 # Reference
