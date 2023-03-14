@@ -323,7 +323,7 @@ with(output_hits, {
 
 4. Visualize your top hits using a heatmap. Do you conditions cluster together? Explain why or why not.
 * To find the most significantly differentially expressed, we select the genes that pass a P-value threshold of 0.05, and has absolute value of LFC larger than 2 as the top hits.
-```{r}
+```{r heatmap create, eval=FALSE, fig.show='hide'}
 # Get top hit genes based on p-value and log fold change
 top_hits <- output_hits$gene[output_hits$P.Value < 0.05 & abs(output_hits$logFC) > 2]
 
@@ -346,12 +346,45 @@ current_heatmap <- Heatmap(as.matrix(heatmap_matrix_tophits),
                            col = heatmap_color,
                            show_column_names = TRUE,
                            show_row_names = FALSE,
-                           show_heatmap_legend = TRUE)
+                           show_heatmap_legend = TRUE, 
+                           column_names_gp = grid::gpar(fontsize = 6),
+                           heatmap_legend_param = list(title = "Expression level"))
+draw(current_heatmap,
+   column_title=
+     "Gene expression between Smo(flox/-) mutants (MUT) and wild type (WT) ",
+   column_title_gp=grid::gpar(fontsize=12))
 ```
 
 ```{r heatmap, out.width = "90%", echo = FALSE, fig.cap="Figure 4. Heatmap representation of gene expression analysis between 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples, showing log2 counts per million (logCPM) values for top hit genes identified by differential expression analysis. Rows represent genes and columns represent samples, with pink indicating higher expression and cyan indicating lower expression. The dendrograms on the top and left show clustering of genes and samples, respectively. The heatmap highlights distinct patterns of gene expression between the Smo(flox/-) mutants and control samples, with several key genes showing significant up- or down-regulation."}
-# Show the heatmap
-current_heatmap
+# Get top hit genes based on p-value and log fold change
+top_hits <- output_hits$gene[output_hits$P.Value < 0.05 & abs(output_hits$logFC) > 2]
+
+# Calculate logCPM values for all genes
+hm_matrix <- log2(normalized_counts + 1) # Add 1 to avoid log transformation of zero counts.
+
+# Subset matrix to include only top hit genes
+heatmap_matrix_tophits <- t(scale(
+    t(hm_matrix[which(rownames(hm_matrix) %in% top_hits),]), 
+    center = TRUE, scale = TRUE))
+
+# Choose colors for heatmap
+heatmap_color <- colorRamp2(c(min(heatmap_matrix_tophits), 0, max(heatmap_matrix_tophits)),
+                            c("#00FFFF", "white", "#FF00BF"))
+
+# Create heatmap with dendrograms for genes and samples
+current_heatmap <- Heatmap(as.matrix(heatmap_matrix_tophits),
+                           show_row_dend = TRUE,
+                           show_column_dend = TRUE,
+                           col = heatmap_color,
+                           show_column_names = TRUE,
+                           show_row_names = FALSE,
+                           show_heatmap_legend = TRUE, 
+                           column_names_gp = grid::gpar(fontsize = 6),
+                           heatmap_legend_param = list(title = "Expression level"))
+draw(current_heatmap,
+   column_title=
+     "Gene expression between Smo(flox/-) mutants (MUT) and wild type (WT) ",
+   column_title_gp=grid::gpar(fontsize=12))
 ```
 * The heatmap does has a clear clustering of gene expression values that are either up-regulated genes or the down-regulated genes, which suggests a evidence of differentially expressed genes.
 
