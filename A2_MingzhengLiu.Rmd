@@ -13,18 +13,22 @@ output:
     toc_depth: 2
   pdf_document:
     fig_caption: yes
-bibliography: A2_MingzhengLiu.bib
 always_allow_html: yes
 ---
 ## Objective of Assignment 2
 To take the normalized expression data that was created in Assignment #1 and rank the genes according to differential expression. 
 Once the gene list is ranked, a thresholded over-representation analysis is performed to highlight dominant themes in the top set of genes.
 
+# Introduction
+The dataset is derived from genetically engineered Foxd1Cre;Smo(flox/-) house mice and aims to investigate the mRNA content of mutant kidneys to gain a deeper understanding of the molecular mechanisms underlying the developmental defects observed in the kidney. The Hedgehog-GLI pathway, which is responsible for the development and patterning of various tissues and organs, including the kidney, interacts with the transforming growth factor beta (TGF) signaling pathway, another critical regulator of kidney development. Smo, a key component of the Hedgehog-GLI signaling pathway, plays a crucial role in human kidney development and modulates TGF&beta; signaling in the kidney, and its disruption can lead to abnormal kidney development and function. The ultimate goal of understanding the role of Smo in these signaling pathways is to uncover the molecular mechanisms underlying normal kidney development and diseases, which could ultimately lead to the development of new therapeutic strategies for kidney disorders. 
+
+In the previous work on the dataset with accession ID GSE103923, an initial processing of the data has been done, including accessing the dataset quality, filtering the low expression gene. The dataset was downloaded in a normalized data with identified as a mixed of HUGO symbol and he Mouse Genome Informatics (MGI) symbol. Hence, a identifier mapping was performed, and no extra normalization was applied. The result of assignment one is a a clean, normalized dataset stored in the root directory as "smo_exp_normalized.txt".
+ 
 ## Preparation
 Tools are needed for a differential expression analysis and a threshold over-representation analysis for our normalized dataset created in Assignment 1: 
 
 * Packages used
-```{r Repare packages, message=FALSE}
+```{r Repare packages, message=FALSE, warning=FALSE}
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 library(BiocManager)
@@ -64,13 +68,14 @@ library(Biobase)
 if (!requireNamespace("dplyr", quietly = TRUE))
   install.packages("dplyr")
 library(dplyr)
-if (!requireNamespace("kableExtra", quietly = TRUE))
-  install.packages("kableExtra")
+if (!requireNamespace("kableExtra", quietly = TRUE)){
+  install.packages("kableExtra")}
 library(kableExtra)
 ```
 
 ## Prepare dataset from Assignment 1
 The result dataset from assignment 1 is stored in our root directory as "smo_exp_final.txt"
+
 ```{r retrieve dataset}
 # Retreive the Assignment 1 result dataset
 normalized_counts <- read.table("smo_exp_normalized.txt")
@@ -79,14 +84,15 @@ kable(normalized_counts[1:5,1:4], format = "html")
 kable(normalized_counts[1:5,5:8], format = "html")
 ```
 # Differential Gene Expression
-Step 1: Create a design model to be used for calculating differential expression, 
-Step 2: Perform an analysis of differential expression using the normalized expression data obtained in A1. 
+Two steps will be performed in this step:
+* Step 1: Create a design model to be used for calculating differential expression, 
+* Step 2: Perform an analysis of differential expression using the normalized expression data obtained in A1. 
 
 ## Step 1: Create a design matrix
 * This dataset has only one factor, the Smo knockout mutant type.
 * The control will be the wild-type samples.
 * inspect our dataset and refer back to the MDS plot from A1 to show which factors included in my model.
-```{r MDS plot, out.width = "90%", echo = FALSE, fig.cap="Figure 1. Multidimensional Scaling (MDS) plot showing the clustering of samples based on gene expression data. Each point represents a sample, colored according to the treatment group, cyan = Smo-knockout (MUT), pink = wild type (WT). The plot reveals clear separation of the knockout and wild type samples, indicating significant differences in gene expression between the two groups."}
+```{r create MDS plot, fig.show ='hide', eval= FALSE, message = FALSE}
 # Calculate distances and plot MDS
 dist <- dist(t(log2(cpm(normalized_counts) + 1)))
 plotMDS(dist, 
@@ -94,6 +100,15 @@ plotMDS(dist,
         col=ifelse(grepl("WT",colnames(normalized_counts)), "#00FFFF", "#FF00BF"), 
         pch=16, main="Normalized MDS plot of Smo(flox/-) mutants and wild type")
 
+```
+
+```{r MDS plot, out.width = "90%", echo = FALSE, message =FALSE, fig.cap="Figure 1. Multidimensional Scaling (MDS) plot showing the clustering of samples based on gene expression data. Each point represents a sample, colored according to the treatment group, cyan = Smo-knockout (MUT), pink = wild type (WT). The plot reveals clear separation of the knockout and wild type samples, indicating significant differences in gene expression between the two groups."}
+# Calculate distances and plot MDS
+dist <- dist(t(log2(cpm(normalized_counts) + 1)))
+plotMDS(dist, 
+        labels=colnames(normalized_counts), 
+        col=ifelse(grepl("WT",colnames(normalized_counts)), "#00FFFF", "#FF00BF"), 
+        pch=16, main="Normalized MDS plot of Smo(flox/-) mutants and wild type")
 ```
 
 ### Create design matrix with genotype factor
@@ -125,9 +140,43 @@ design <- model.matrix(~ samples$genotype)
 kable(design[2:7,], type ="html")
 ```
 
-### check assumption
+### Check assumption
 * perform diagnostic Mean-Variance plot for our dataset
 * Verify the assumption that our dataset to be negative-binomially distributed to use a linear model
+```{r create MV plot, fig.show = "hide", eval=FALSE}
+
+# create a DGEList object
+dge <- DGEList(counts = normalized_counts, group = factor(rep(c("MUT", "WT"), each = 4)))
+
+# filter low-expressed genes
+keep <- rowSums(cpm(dge) > 1) >= 2
+dge <- dge[keep,]
+
+# normalize data
+dge <- calcNormFactors(dge)
+
+# estimate dispersion
+dge <- estimateDisp(dge)
+
+# estimate tagwise dispersion
+tagwise_disp <- estimateTagwiseDisp(dge)
+
+# generate MV plot
+plotMeanVar(dge, 
+            show.raw.vars = TRUE,
+            show.tagwise.vars = TRUE,
+            NBline = TRUE,
+            show.ave.raw.vars = TRUE,
+            show.binned.common.disp.vars = TRUE,
+            main = "Mean-Variance Plot of Smo(flox/-) mutants and wild type")
+# add legend
+legend("topleft", 
+       legend=c("Raw Data", "Tagwise Dispersion", "Average Raw Variances", 
+                "Binned Common Dispersion", "Negative Binomial Line"), 
+       col = c("grey", "lightblue", "maroon", "red", "dodgerblue2"), 
+       pch=c(1,1,4,4,NA), lty=c(0,0,0,0,1), lwd=c(1,1,1,1,2), cex=0.6)
+```
+
 ```{r MV plot, out.width = "90%", echo = FALSE, fig.cap="Figure 2. Mean-variance plot showing the distribution of data. The dispersion and variance of the data  follows the negative binomial distribution, in which the raw data and the blue negative binomial line alligns.", message=FALSE}
 
 # create a DGEList object
@@ -154,17 +203,15 @@ plotMeanVar(dge,
             show.ave.raw.vars = TRUE,
             show.binned.common.disp.vars = TRUE,
             main = "Mean-Variance Plot of Smo(flox/-) mutants and wild type")
-
 # add legend
 legend("topleft", 
        legend=c("Raw Data", "Tagwise Dispersion", "Average Raw Variances", 
                 "Binned Common Dispersion", "Negative Binomial Line"), 
-       col = c("grey", "lightblue", "maroon", "red", "dodgerblue2"), pch=c(1,1,4,4,NA), lty=c(0,0,0,0,1), lwd=c(1,1,1,1,2), cex=0.6)
-
+       col = c("grey", "lightblue", "maroon", "red", "dodgerblue2"), 
+       pch=c(1,1,4,4,NA), lty=c(0,0,0,0,1), lwd=c(1,1,1,1,2), cex=0.6)
 ```
 
 ## Step 2: Differential Expression Analysis
-
 1. Calculate p-values for each of the genes in your expression set. How many genes were significantly differentially expressed? What thresholds did you use and why?
 ```{r pval calculation}
 # create a matrix 
@@ -217,7 +264,7 @@ length(which(output_hits$adj.P.Val < 0.05))
 
 3. Show the amount of differentially expressed genes using an MA Plot or a Volcano plot. Highlight genes of interest.
 * Volcano Plot is used for visualization. The genes of interest with a high log fold change values are labeled in blue.
-```{r volcano plot, out.width = "90%", echo = FALSE, fig.cap="Figure 3. Volcano plot for differential gene expression analysis between 4 Smo(flox/-) mutants(MUT) and 4 wild type (WT) samples. Each point represents a gene, with red points indicating up-regulated genes, green points indicating down-regulated genes, and grey points indicating non-significant genes. The gene of interest, Smo, is highlighted in blue. The plot shows significant differential expression of several genes, with Smo showing a log2 fold change of X and a p-value of Y"}
+```{r create volcano plot, fig.show = "hide", eval=FALSE}
 
 # Create a vector of colors for each point in the volcano plot
 colors <- ifelse(output_hits$P.Value < 0.05 & output_hits$logFC > 1, "red", 
@@ -244,12 +291,39 @@ with(output_hits, {
        labels = ifelse(gene %in% top10_genes$gene, gene, ""), 
        pos = 4, cex = 0.5, srt=45, col="blue")
 })
+```
+```{r volcano plot, out.width = "90%", echo = FALSE, fig.cap="Figure 3. Volcano plot for differential gene expression analysis between 4 Smo(flox/-) mutants(MUT) and 4 wild type (WT) samples. Each point represents a gene, with red points indicating upregulated genes, green points indicating down-regulated genes, and grey points indicating non-significant genes. The gene of interest, Smo, is highlighted in blue. The plot shows significant differential expression of several genes, with Smo showing a log2 fold change of X and a p-value of Y"}
 
+# Create a vector of colors for each point in the volcano plot
+colors <- ifelse(output_hits$P.Value < 0.05 & output_hits$logFC > 1, "red", 
+         ifelse(output_hits$P.Value < 0.05 & output_hits$logFC < -1, "green", "grey"))
+
+# Plot the volcano plot with colored points
+plot(output_hits$logFC, -log10(output_hits$P.Value), pch=20, col=colors, 
+     xlab="log2(Fold Change)", ylab="-log10(P-value)", 
+     main="Volcano Plot of Smo(flox/-) mutants and wild type")
+
+# Add legend for the colors
+legend("topright", legend=c("Up-regulated", "Down-regulated", "Non-significant"), 
+       col=c("red", "green", "grey"), pch=20, cex=0.8)
+
+# Label genes with over top 10 logFC
+# Subset top 10 genes with largest absolute logFC values
+top10_genes <- subset(output_hits, 
+                      abs(logFC) > sort(abs(logFC), decreasing = TRUE)[10])
+
+# Add text labels to the top 10 logFC points in volcano plot
+with(output_hits, {
+  text(x = logFC, 
+       y = -log10(P.Value), 
+       labels = ifelse(gene %in% top10_genes$gene, gene, ""), 
+       pos = 4, cex = 0.5, srt=45, col="blue")
+})
 ```
 
 4. Visualize your top hits using a heatmap. Do you conditions cluster together? Explain why or why not.
 * To find the most significantly differentially expressed, we select the genes that pass a P-value threshold of 0.05, and has absolute value of LFC larger than 2 as the top hits.
-```{r heatmap, out.width = "90%", echo = FALSE, fig.cap="Figure 4. Heatmap representation of gene expression analysis between 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples, showing log2 counts per million (logCPM) values for top hit genes identified by differential expression analysis. Rows represent genes and columns represent samples, with pink indicating higher expression and cyan indicating lower expression. The dendrograms on the top and left show clustering of genes and samples, respectively. The heatmap highlights distinct patterns of gene expression between the Smo(flox/-) mutants and control samples, with several key genes showing significant up- or down-regulation."}
+```{r}
 # Get top hit genes based on p-value and log fold change
 top_hits <- output_hits$gene[output_hits$P.Value < 0.05 & abs(output_hits$logFC) > 2]
 
@@ -273,9 +347,11 @@ current_heatmap <- Heatmap(as.matrix(heatmap_matrix_tophits),
                            show_column_names = TRUE,
                            show_row_names = FALSE,
                            show_heatmap_legend = TRUE)
+```
+
+```{r heatmap, out.width = "90%", echo = FALSE, fig.cap="Figure 4. Heatmap representation of gene expression analysis between 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples, showing log2 counts per million (logCPM) values for top hit genes identified by differential expression analysis. Rows represent genes and columns represent samples, with pink indicating higher expression and cyan indicating lower expression. The dendrograms on the top and left show clustering of genes and samples, respectively. The heatmap highlights distinct patterns of gene expression between the Smo(flox/-) mutants and control samples, with several key genes showing significant up- or down-regulation."}
 # Show the heatmap
 current_heatmap
-
 ```
 * The heatmap does has a clear clustering of gene expression values that are either up-regulated genes or the down-regulated genes, which suggests a evidence of differentially expressed genes.
 
@@ -325,51 +401,73 @@ enriched_downreg <- enrich_downreg$result[enrich_downreg$result$p_value < 0.05, 
 ```
 ```{r top 5 genesets}
 # inspect top 5
-knitr::kable(head(enriched, 5), format = "html")
-knitr::kable(head(enriched_upreg, 5), format = "html")
-knitr::kable(head(enriched_downreg, 5), format = "html")
+knitr::kable(head(enriched[,3:11], 5), format = "html", 
+             table.attr = 'style="width: 30%; border-collapse: separate; border-spacing: 15px;"')
+knitr::kable(head(enriched_upreg[,3:11], 5), format = "html", 
+             table.attr = 'style="width: 30%; border-collapse: separate; border-spacing: 15px;"')
+knitr::kable(head(enriched_downreg[,3:11], 5), format = "html", 
+             table.attr = 'style="width: 30%; border-collapse: separate; border-spacing: 15px;"')
 ```
 ```{r top 1 from all 3 sources}
 # inspect top one from three data sources for all genes
 knitr::kable(rbind(enriched[enriched$source == "GO:BP",][1,9:13],
                    enriched[enriched$source == "REAC",][1,9:13],
                    enriched[enriched$source == "WP",][1,9:13]),
-             format = "html")
+             format = "html",
+             table.attr = 'style="width: 30%; border-collapse: separate; border-spacing: 15px;"')
 
-# inspect top one from three data sources for upregulated genes
+# inspect top one from three data sources for up-regulated genes
 knitr::kable(rbind(enriched_upreg[enriched_upreg$source == "GO:BP",][1,9:13],
                    enriched_upreg[enriched_upreg$source == "REAC",][1,9:13],
                    enriched_upreg[enriched_upreg$source == "WP",][1,9:13]),
-             format = "html")
+             format = "html",
+             table.attr = 'style="width: 30%; border-collapse: separate; border-spacing: 15px;"')
 
-# inspect top one from three data sources for downregulated genes
+# inspect top one from three data sources for down-regulated genes
 knitr::kable(rbind(enriched_downreg[enriched_downreg$source == "GO:BP",][1,9:13],
                    enriched_downreg[enriched_downreg$source == "REAC",][1,9:13],
                    enriched_downreg[enriched_downreg$source == "WP",][1,9:13]),
-             format = "html")
+             format = "html",
+             table.attr = 'style="width: 30%; border-collapse: separate; border-spacing: 15px;"')
 ```
+
 The top term returned in each data source for all genes:
 * GO:BP: biological_process
 * REAC: Classical antibody-mediated complement activation
 * WP: Fatty acid omega-oxidation
 
-The top term returned in each data source for both up and down regulated genes:
+The top term returned in each data source for both up- and down-regulated genes:
 * GO:BP: biological_process
 * REAC: REACTOME root term	
 * WP: WIKIPATHWAYS
 
 ## Visual Representation of the GSEA results 
-```{r enriched_upreg, out.width = "90%", echo = FALSE, fig.cap="Figure 5. Manhattan plot displaying the distribution of the top genesets from each data source for upregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of GP:BP genesets is returned compared to REAC and WP, and the genesets of RNA processing, biological_process, Metabolism, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
+```{r code explain, eval=FALSE, fig.show='hide'}
+# Three interative figures were generate by g:profiler::gostplot
+# Generate a Manhattan plot to visualize the distribution of the top genesets from each data source.
+gostplot(enrich) %>% plotly::layout(title = "Manhattan plot for genes", font = list(size = 10))
 # Generate a Manhattan plot to visualize the distribution of the top genesets from each data source.
 gostplot(enrich_upreg) %>% plotly::layout(title = "Manhattan plot for Upregulated genes", font = list(size = 10))
-```
-
-```{r enriched_downreg, out.width = "90%", echo = FALSE, fig.cap="Figure 6. Manhattan plot displaying the distribution of the top genesets from each data source for downregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of REAC genesets is returned compared to GP:BP and WP, and genesets of biological_process, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
 # Generate a Manhattan plot to visualize the distribution of the top genesets from each data source.
 gostplot(enrich_downreg) %>% plotly::layout(title = "Manhattan plot for Downregulated genes", font = list(size = 10))
 ```
 
-## Thresholded over-representation analysis
+```{r enriched_reg, out.width = "90%", echo = FALSE, fig.cap="Figure 5. Manhattan plot displaying the distribution of the top genesets from each data source for downregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of REAC genesets is returned compared to GP:BP and WP, and genesets of biological_process, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
+# Generate a Manhattan plot to visualize the distribution of the top genesets from each data source.
+gostplot(enrich) %>% plotly::layout(title = "Manhattan plot for genes", font = list(size = 10))
+```
+
+```{r enriched_upreg, out.width = "90%", echo = FALSE, fig.cap="Figure 6. Manhattan plot displaying the distribution of the top genesets from each data source for up-regulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of GP:BP genesets is returned compared to REAC and WP, and the genesets of RNA processing, biological_process, Metabolism, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
+# Generate a Manhattan plot to visualize the distribution of the top genesets from each data source.
+gostplot(enrich_upreg) %>% plotly::layout(title = "Manhattan plot for Upregulated genes", font = list(size = 10))
+```
+
+```{r enriched_downreg, out.width = "90%", echo = FALSE, fig.cap="Figure 7. Manhattan plot displaying the distribution of the top genesets from each data source for downregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of REAC genesets is returned compared to GP:BP and WP, and genesets of biological_process, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
+# Generate a Manhattan plot to visualize the distribution of the top genesets from each data source.
+gostplot(enrich_downreg) %>% plotly::layout(title = "Manhattan plot for Downregulated genes", font = list(size = 10))
+```
+
+## Thresholded over-representation discussion
 1. Which method did you choose and why?
 * The method used is the g:Profiler for the over-representation analysis since we have use it during the lecture. g:Profiler supports a wide range of annoatation sources, including Gene Ontology (GO), KEGG pathways, Reactome, WikiPathways. This allows for comprehensive analysis and interpretation of genes. g:Profiler is also continuously updated, which ensures that the analysis is based on the most up-to-date and relevant information.
 
@@ -384,23 +482,25 @@ nrow(enriched_downreg)
 ```
 * The threshold used is p < 0.05. 
 * For all genesets, 107 genesets were return. 
-* For the upregulated genes, 69 genesets were returned.
-* For the downregulated genes, 31 genesets were returned.
+* For the up-regulated genes, 69 genesets were returned.
+* For the down-regulated genes, 31 genesets were returned.
 
 4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes together vs. the up-regulated and down regulated differentially expressed genes separately)?
-* The results performed on the up-regulated set of genes, and the down-regulated set of genes provided a more clear insight into the biological processes that are specifically affected by each group of genes. The number of gene sets of the upregulated genes is more than the downregulated genes, which indicates more biological processes or pathways are overrepresented among the upregulated genes compared to the downregulated genes. 
-*For example, if a gene set related to cell proliferation is enriched in the upregulated genes and a gene set related to cell cycle arrest is enriched in the downregulated genes, it suggests that the upregulated genes may be involved in promoting cell proliferation, while the downregulated genes may be involved in inhibiting cell cycle progression.
-
-
-
-
-
-
+* The results performed on the up-regulated set of genes, and the down-regulated set of genes provided a more clear insight into the biological processes that are specifically affected by each group of genes. The analysis of the up-regulated genes and the down-regulated genes separately returned fewer gene sets than the analysis using all differentially expressed genes together, which suggests that the up-regulated and down-regulated genesets capture different biological processes and pathways that are not fully represented when all differentially expressed genes are analyzed together.
+* The number of gene sets of the up-regulated genes is more than the down-regulated genes, which indicates more biological processes or pathways are overrepresented among the up-regulated genes compared to the down-regulated genes. 
 
 # Interpretation
 1. Do the over-representation results support conclusions or mechanism discussed in the original paper?
-*  In our dataset, the Smo protein is the receptor of the Hedgehog signaling which responsible for the regulating the branching and growth of the urinary buds. 
+*  The over-representation analysis results are consistent with the mechanism discussed in the original paper. The paper states that the Hedgehog-GLI signaling pathway, which involves Smo protein, plays a crucial role in kidney development and interacts with the TGF beta signaling pathway. The over-representation analysis identified several enriched gene sets related to these signaling pathways and their downstream processes, which supports the idea that the dysregulation of these pathways can lead to abnormal kidney development and function. Additionally, the analysis of the up-regulated and down-regulated genes separately provided more insight into the specific biological processes that are affected by each group of genes, further supporting the complexity of the molecular mechanisms underlying kidney development and diseases.
 
 2. Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your results.
+* As discussed in Miura (2013), the ω-oxidation of fatty acids is critical in the metabolic process of the kiney, which confirms that the wikipathway of Fatty acid omega-oxidation is return by the all genes analysis. 
+* Since the sequencing took place on the futus of house mice, the innate immune system are in an active state during pregnancey for fetus-maternal interations as discussed by Chighizola et al (2020). The activation of the Classical antibody-mediated complement activation confirms the result of the top 1 genesets returned by the Reactome data source. 
+
 
 # References
+* Rowan CJ, Li W, Martirosyan H, Erwood S, Hu D, Kim YK, Sheybani-Deloui S, Mulder J, Blake J, Chen L, Rosenblum ND. [Hedgehog-GLI signaling in Foxd1-positive stromal cells promotes murine nephrogenesis via TGF`&beta` signaling.] Development 1 July 2018; 145 (13): dev159947. (doi: 10.1242/dev.159947).
+
+* Miura Y. The biological significance of ω-oxidation of fatty acids. Proc Jpn Acad Ser B Phys Biol Sci. 2013;89(8):370-82. (doi: 10.2183/pjab.89.370.)
+
+* Chighizola CB, Lonati PA, Trespidi L, Meroni PL, Tedesco F. The Complement System in the Pathophysiology of Pregnancy and in Systemic Autoimmune Rheumatic Diseases During Pregnancy. Front Immunol. 2020 Aug 27;11:2084. (doi: 10.3389/fimmu.2020.02084.)
