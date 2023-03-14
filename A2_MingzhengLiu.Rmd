@@ -2,7 +2,7 @@
 title: "BCB420_Assignment2"
 subtitle: "Differential Gene expression and Preliminary ORA"
 author: "Mingzheng liu"
-date: "07/03/2022"
+date: "14/03/2022"
 output:
   html_document:
     toc: yes
@@ -19,18 +19,9 @@ always_allow_html: yes
 ## Objective of Assignment 2
 To take the normalized expression data that was created in Assignment #1 and rank the genes according to differential expression. 
 Once the gene list is ranked, a thresholded over-representation analysis is performed to highlight dominant themes in the top set of genes.
+
 ## Preparation
 Tools are needed for a differential expression analysis and a threshold over-representation analysis for our normalized dataset created in Assignment 1: 
-
-The GEOmetadb package.
-
-The GEOmetadb is downloaded through BioManager.
-
-The mapping of HUGO symbol requires biomaRt.
-
-The normalization of the data requires edgeR, splines.
-
-The presentation of the data requires knitr and ggplot2.
 
 * Packages used
 ```{r Repare packages, message=FALSE}
@@ -55,7 +46,6 @@ library(ComplexHeatmap)
 if (!requireNamespace("gprofiler2", quietly = TRUE))
     BiocManager::install("gprofiler2")
 library(gprofiler2)
-# we need knitr and ggplot2 to present the data
 if (!requireNamespace("knitr", quietly = TRUE))
   install.packages("knitr")
 library(knitr)
@@ -103,7 +93,7 @@ dist <- dist(t(log2(cpm(normalized_counts) + 1)))
 plotMDS(dist, 
         labels=colnames(normalized_counts), 
         col=ifelse(grepl("WT",colnames(normalized_counts)), "#00FFFF", "#FF00BF"), 
-        pch=16)
+        pch=16, main="Normalized MDS plot of Smo(flox/-) mutants and wild type")
 
 ```
 
@@ -139,7 +129,7 @@ kable(design[2:7,], type ="html")
 ### check assumption
 * perform diagnostic Mean-Variance plot for our dataset
 * Verify the assumption that our dataset to be negative-binomially distributed to use a linear model
-```{r MV plot, out.width = "90%", echo = FALSE, fig.cap="Figure 2. Mean-variance plot showing the distribution of data. The dispersion and variance of the data  follows the negative binomial distribution, in which the raw data and the blue negative binomial line alligns."}
+```{r MV plot, out.width = "90%", echo = FALSE, fig.cap="Figure 2. Mean-variance plot showing the distribution of data. The dispersion and variance of the data  follows the negative binomial distribution, in which the raw data and the blue negative binomial line alligns.", message=FALSE}
 
 # create a DGEList object
 dge <- DGEList(counts = normalized_counts, group = factor(rep(c("MUT", "WT"), each = 4)))
@@ -164,7 +154,7 @@ plotMeanVar(dge,
             NBline = TRUE,
             show.ave.raw.vars = TRUE,
             show.binned.common.disp.vars = TRUE,
-            main = "Mean-Variance Plot for Gene Expression Dataset")
+            main = "Mean-Variance Plot of Smo(flox/-) mutants and wild type")
 
 # add legend
 legend("topleft", 
@@ -177,7 +167,7 @@ legend("topleft",
 ## Step 2: Differential Expression Analysis
 
 1. Calculate p-values for each of the genes in your expression set. How many genes were significantly differentially expressed? What thresholds did you use and why?
-```{r}
+```{r pval calculation}
 # create a matrix 
 expressionMatrix <- as.matrix(normalized_counts[,1:8])
 # Set row and column names
@@ -194,14 +184,14 @@ fit <- lmFit(normalized_counts, design)
 fit2 <- eBayes(fit, trend=TRUE)
 
 # Get the top differentially expressed genes
-results <- topTable(fit2,  
+top_genes <- topTable(fit2,  
                    coef=ncol(design),
                    adjust.method = "BH",
                    number = nrow(expressionMatrix))
 
 # merge gene ids to topfit table
 output_hits <- merge(rownames(normalized_counts),
-                     results,
+                     top_genes,
                      by.y=0,by.x=1,
                      all.y=TRUE)
 # sort by p-value
@@ -209,6 +199,8 @@ output_hits <- output_hits[order(output_hits$P.Value),]
 
 # inspect
 kable(output_hits[1:5,1:7],type="html",row.names = FALSE)
+# Rename the column name of gene
+colnames(output_hits)[1] <- "gene"
 
 # calculate the number of gene pass the threshold p-value < 0.05
 length(which(output_hits$P.Value < 0.05))
@@ -217,30 +209,139 @@ length(which(output_hits$P.Value < 0.05))
 * A threshold of p-value < 0.05 is used to determine significant differential expression. This is a commonly used threshold in statistical analysis, as it indicates that there is less than a 5% chance that the observed differences in gene expression are due to random chance. 
 
 2. Multiple hypothesis testing - correct your p-values using a multiple hypothesis correction method. Which method did you use? And Why? How many genes passed correction?
-```{r}
+```{r count passed}
 # How many genes pass correction (multipole hypothesis testing) ?
 length(which(output_hits$adj.P.Val < 0.05))
 ```
-* The choice of multiple hypothesis testing method will be the Benjamini-Hochberg method to controls the false discovery rate (FDR) given that it the gene expression data of the whole cell and genes are independent or weakly correlated.  Benjamini-Hochberg method are appropriate for controlling the FDR in large-scale hypothesis testing.
+* The choice of multiple hypothesis testing method will be the Benjamini-Hochberg method to controls the false discovery rate (FDR) given that it the gene expression data of the whole cell and genes are independent or weakly correlated.Benjamini-Hochberg method are appropriate for controlling the FDR in large-scale hypothesis testing.
 * 49 genes passed this correction.
 
 3. Show the amount of differentially expressed genes using an MA Plot or a Volcano plot. Highlight genes of interest.
-```{r}
-gene_of_interest <- "Smo"
+* Volcano Plot is used for visualization. The genes of interest with a high log fold change values are labeled in blue.
+```{r volcano plot, out.width = "90%", echo = FALSE, fig.cap="Figure 3. Volcano plot for differential gene expression analysis between 4 Smo(flox/-) mutants(MUT) and 4 wild type (WT) samples. Each point represents a gene, with red points indicating up-regulated genes, green points indicating down-regulated genes, and grey points indicating non-significant genes. The gene of interest, Smo, is highlighted in blue. The plot shows significant differential expression of several genes, with Smo showing a log2 fold change of X and a p-value of Y"}
 
-# Generate MA plot
-plotMA(fit2, main = "MA plot")
+# Create a vector of colors for each point in the volcano plot
+colors <- ifelse(output_hits$P.Value < 0.05 & output_hits$logFC > 1, "red", 
+         ifelse(output_hits$P.Value < 0.05 & output_hits$logFC < -1, "green", "grey"))
+
+# Plot the volcano plot with colored points
+plot(output_hits$logFC, -log10(output_hits$P.Value), pch=20, col=colors, 
+     xlab="log2(Fold Change)", ylab="-log10(P-value)", 
+     main="Volcano Plot of Smo(flox/-) mutants and wild type")
+
+# Add legend for the colors
+legend("topright", legend=c("Up-regulated", "Down-regulated", "Non-significant"), 
+       col=c("red", "green", "grey"), pch=20, cex=0.8)
+
+# Label genes with over top 10 logFC
+# Subset top 10 genes with largest absolute logFC values
+top10_genes <- subset(output_hits, 
+                      abs(logFC) > sort(abs(logFC), decreasing = TRUE)[10])
+
+# Add text labels to the top 10 logFC points in volcano plot
+with(output_hits, {
+  text(x = logFC, 
+       y = -log10(P.Value), 
+       labels = ifelse(gene %in% top10_genes$gene, gene, ""), 
+       pos = 4, cex = 0.5, srt=45, col="blue")
+})
+
 ```
 
 4. Visualize your top hits using a heatmap. Do you conditions cluster together? Explain why or why not.
+* To find the most significantly differentially expressed, we select the genes that pass a P-value threshold of 0.05, and has absolute value of LFC larger than 2 as the top hits.
+```{r heatmap, out.width = "90%", echo = FALSE, fig.cap="Figure 4. Heatmap representation of gene expression analysis between 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples, showing log2 counts per million (logCPM) values for top hit genes identified by differential expression analysis. Rows represent genes and columns represent samples, with pink indicating higher expression and cyan indicating lower expression. The dendrograms on the top and left show clustering of genes and samples, respectively. The heatmap highlights distinct patterns of gene expression between the Smo(flox/-) mutants and control samples, with several key genes showing significant up- or down-regulation."}
+# Get top hit genes based on p-value and log fold change
+top_hits <- output_hits$gene[output_hits$P.Value < 0.05 & abs(output_hits$logFC) > 2]
 
-```{r}
+# Calculate logCPM values for all genes
+hm_matrix <- log2(normalized_counts + 1) # Add 1 to avoid log transformation of zero counts.
+
+# Subset matrix to include only top hit genes
+heatmap_matrix_tophits <- t(scale(
+    t(hm_matrix[which(rownames(hm_matrix) %in% top_hits),]), 
+    center = TRUE, scale = TRUE))
+
+# Choose colors for heatmap
+heatmap_color <- colorRamp2(c(min(heatmap_matrix_tophits), 0, max(heatmap_matrix_tophits)),
+                            c("#00FFFF", "white", "#FF00BF"))
+
+# Create heatmap with dendrograms for genes and samples
+current_heatmap <- Heatmap(as.matrix(heatmap_matrix_tophits),
+                           show_row_dend = TRUE,
+                           show_column_dend = TRUE,
+                           col = heatmap_color,
+                           show_column_names = TRUE,
+                           show_row_names = FALSE,
+                           show_heatmap_legend = TRUE)
+# Show the heatmap
+current_heatmap
 
 ```
+* The heatmap does has a clear clustering of gene expression values that are either up-regulated genes or the down-regulated genes, which suggests a evidence of differentially expressed genes.
 
 # Thresholded over-representation analysis
-run a thresholded gene set enrichment analysis with your significantly up-regulated and down-regulated set of genes 
+run a thresholded gene set enrichment analysis (GSEA) with your significantly up-regulated and down-regulated set of genes using the g:Profiler.
 
+## Preparation of up-regulated and down-regulated 
+```{r prepare genes}
+# Create a vector of gene symbols for the up-regulated and down-regulated genes
+upregulated <- output_hits[output_hits$logFC > 0 & output_hits$P.Value < 0.05, ]
+downregulated <- output_hits[output_hits$logFC < 0 & output_hits$P.Value < 0.05, ]
+
+upregulated_genes <- upregulated$gene
+downregulated_genes <- downregulated$gene
+```
+
+## Perform gene set enrichment analysis
+```{r GSEA}
+# Use the gprofiler2 function to perform gene set enrichment analysis
+# note that we were using the organism = hsapiens insted of 
+enrich_upreg <- gost(query = upregulated_genes, organism = "mmusculus", 
+                           ordered_query = TRUE, 
+                     measure_underrepresentation = TRUE, 
+                     correction_method = "fdr",
+                     sources = c("GO:BP", "REAC", "WP"))
+
+enrich_downreg <- gost(downregulated_genes, organism = "mmusculus", 
+                           ordered_query = TRUE, 
+                     measure_underrepresentation = TRUE, 
+                     correction_method = "fdr",
+                     sources = c("GO:BP", "REAC", "WP"))
+```
+
+```{r GSEA interetation}
+# extract the enriched gene sets with a p-value < 0.05
+enriched_upreg <- enrich_upreg$result[enrich_upreg$result$p_value < 0.05, ]
+enriched_downreg <- enrich_downreg$result[enrich_downreg$result$p_value < 0.05, ]
+
+knitr::kable(head(enriched_upreg, 10), format = "html")
+knitr::kable(head(enriched_downreg, 10), format = "html")
+
+# inspect top one from three data sources for upregulated genes
+knitr::kable(rbind(enriched_upreg[enriched_upreg$source == "GO:BP",][1,],
+                   enriched_upreg[enriched_upreg$source == "REAC",][1,],
+                   enriched_upreg[enriched_upreg$source == "WP",][1,]),
+             format = "html")
+
+# inspect top one from three data sources for downregulated genes
+knitr::kable(rbind(enriched_downreg[enriched_downreg$source == "GO:BP",][1,],
+                   enriched_downreg[enriched_downreg$source == "REAC",][1,],
+                   enriched_downreg[enriched_downreg$source == "WP",][1,]),
+             format = "html")
+```
+## Visual Representation of the GSEA results 
+```{r enriched_upreg, out.width = "90%", echo = FALSE, fig.cap="Figure 5. Manhattan plot displaying the distribution of the top terms from each data source for upregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of GP:BP terms compared to REAC and WP, and terms of RNA processing, biological_process, Metabolism, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
+# Generate a Manhattan plot to visualize the distribution of the top terms from each data source.
+gostplot(enrich_upreg) %>% plotly::layout(title = "Manhattan plot for Upregulated genes", font = list(size = 10))
+```
+
+```{r enriched_downreg, out.width = "90%", echo = FALSE, fig.cap="Figure 6. Manhattan plot displaying the distribution of the top terms from each data source for downregulated genes of 4 Smo(flox/-) mutants (MUT) and 4 wild type (WT) samples. A extensive number of REAC terms compared to GP:BP and WP, and terms of biological_process, REACTOME root term, and WIKIPATHWAYS are exceeding 16 -log10 correction threshold."}
+# Generate a Manhattan plot to visualize the distribution of the top terms from each data source.
+gostplot(enrich_downreg) %>% plotly::layout(title = "Manhattan plot for Downregulated genes", font = list(size = 10))
+```
+
+## Thresholded over-representation analysis
 1. Which method did you choose and why?
 2. What annotation data did you use and why? What version of the annotation are you using?
 3. How many genesets were returned with what thresholds?
