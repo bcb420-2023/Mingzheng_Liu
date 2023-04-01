@@ -7,8 +7,7 @@ output:
   html_document:
     toc: true
     toc_depth: 2
-bibliographt: lec7.bib
-csl: biomed-central.csl    
+bibliography: lec7.bib
 editor_options: 
   markdown: 
     wrap: 72
@@ -121,7 +120,6 @@ bibliography: lecture6.bib
 
 * Step 3: In the body of your R Markdown document, you can cite your references using the `@` symbol followed by the citation key, like this: `@cytoscape2003`. For example:
 
-In his groundbreaking article, @cytoscape2003 proposed a theory of everything that has since revolutionized the field
+* In his groundbreaking article, @cytoscape2003 proposed a theory of everything that has since revolutionized the field
 
-# Reference 
-
+# References 
