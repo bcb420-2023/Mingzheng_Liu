@@ -1,6 +1,6 @@
 ---
 title: "BCB420_week7"
-subtitle: "Subtitle goes here"
+subtitle: "Rmarkdown Tips - Subtitle goes here"
 author: "Mingzheng liu"
 date: "28/02/2022"
 output: 

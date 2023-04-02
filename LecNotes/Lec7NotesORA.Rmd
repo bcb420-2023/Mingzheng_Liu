@@ -1,0 +1,117 @@
+---
+title: "BCB420_week7"
+subtitle: ""
+author: "Mingzheng liu"
+date: "28/02/2022"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+editor_options: 
+  markdown: 
+    wrap: 72
+    
+---
+ BCB420 Lecture 7 Notes - prelim ORA
+---
+# GMT file format
+* File format defined by the GSEA tool when it was originally released in 2003
+* Each row represents a pathway or gene set
+* examples:
+``` {}
+# CREBBP Pathway Collection
+#
+# This pathway collection was curated by the Molecular Signatures Database (MSigDB) team.
+#
+CREBBP_Targets	REACTOME_METABOLISM_OF_LIPIDS_AND_LIPOPROTEINS	CREBBP	POLR2A	GTF2F1	GTF2E2	NCOA6	GTF2H1	SUPT5H	POLR2C	SUPT6H	POLR2B
+CREBBP_Targets	REACTOME_TRANSCRIPTION_FACTOR_TFIIH_DEPENDENT_REGULATION_OF_GENE_EXPRESSION	CREBBP	GTF2F1	GTF2E2	NCOA6	GTF2H1	SUPT5H	POLR2C	SUPT6H	POLR2B
+CREBBP_Targets	KEGG_CELL_CYCLE	CREBBP	CHEK1	CHEK2	CDC25C	CDC25B	CCNA2	CCNB1	CCNB2	CCND1	CCND2	CCNE1	CCNE2	CDKN1B
+
+```
+# Recap
+* Estimate the dispersion,
+* calculate normalization factors,
+* fit the model
+* calculate differentail expression
+
+# Thresholded list or non-thresholded list
+## Thresholded list - genes with p-value < threshold
+* Asks the question - Are there any gene sets or pathways that are enriched/overrepresented or depleted/under-represented in my list
+* Uses stastics like fisher exact test, hypergeometric test to assess this.
+* Tools like: DAVID,g:profiler,ErichR,GREAT
+
+### Pros
+* No learning curve! Plug and play.
+* Very accessible.
+* Quick and fast results
+* Endless of online tools available
+* No requirement for a bioinformatician or computational biologist.
+
+### Cons
+* No set value good for threshold - pvalue<0.05 is accepted but ultimately it is still arbitrary
+* Weak signals are ignored (many weak signals can contribute to the whole)
+* different results at different thresholds
+
+## Non-Thresholded list - ranked gene list
+* Are there any gene sets or pathways that are ranked surprisingly high or low in my ranked list.
+* Uses stastics like KS test, linear models
+* Tools and packages like:
+GSEA - Gene set enrichment anlaysis 
+GSVA - Gene Set Variation Analysis
+
+# Over-Represemtation Analysis / Gene List Enrichment Analysis
+### Start with:
+* Gene list: eg: FUCA2, GCLC, NFYA, NIPAL3, SEMA3F, KRIT1
+* Gene sets or pathways: come from any one of the annotation databases that we
+mentioned at the beginning of the day today.
+
+### Looking for:
+* any of the genelists surprisingly or statistically over-represented in our set of genes
+
+## Method used:
+1. A way to associate a statistic with the above question
+2. A way to correct for the multiple hypothesis that we are going to be asking.
+
+### Two-class design
+A two-class design for gene lists is a type of analysis that compares `gene expression data` between two different groups or classes, such as disease vs. healthy, treated vs. untreated, or control vs. experimental. The goal of this analysis is to identify genes that are differentially expressed between the two classes.
+* several methods that can be used for two-class design analysis of gene lists, including:
+FC, log, t-value, sign(logFC) *-log10(pvalue)
+
+### Simple enrichment tests
+For gene list:
+* Fisher's exact test: This test calculates the probability of observing a set of genes or regions in a specific functional category by chance, based on the total number of genes or regions in the genome and the number of genes or regions in the functional category.
+``` {r}
+# Define the contingency table
+mat <- matrix(c(20, 30, 180, 770), nrow = 2, byrow = TRUE)
+dimnames(mat) <- list(c("Test set", "Other genes"), c("Genes in pathway", "Genes not in pathway"))
+
+# Perform Fisher's exact test
+fisher.test(mat)
+
+```
+* Then, we use the fisher.test function to perform Fisher's exact test on the contingency table. The output shows the p-value, which is the probability of observing a set of genes with 20 or more genes in the pathway among the 50 genes in the test set by chance, as well as the estimated odds ratio and confidence interval. In this case, the p-value is 1.205e-05, which is very small, indicating that the set of 50 genes is significantly enriched for the pathway.
+
+* Chi-squared test: This test compares the observed frequency of genes or regions in the functional category to the expected frequency based on the total number of genes or regions in the genome and the number of genes or regions in the functional category.
+```{r}
+# Define the contingency table
+mat <- matrix(c(50, 30, 20, 40, 30, 20), nrow = 3, byrow = TRUE)
+rownames(mat) <- c("Gene A", "Gene B", "Gene C")
+colnames(mat) <- c("Lung", "Liver")
+
+# Perform chi-square test
+chisq.test(mat)
+# 
+```
+* Then, we use the chisq.test function to perform the chi-square test on the contingency table. The output shows the chi-square statistic, degrees of freedom, and p-value. In this case, the p-value is 0.001877, which is less than 0.05, indicating that there is a significant difference in gene frequencies between lung and liver tissues.
+
+For Ranked gene list:
+
+* Hypergeometric test: This test is similar to Fisher's exact test, but takes into account the total number of genes or regions in the genome, the number of genes or regions in the functional category, and the size of the set of genes or regions being tested.
+
+Simple enrichment tests can be performed using various software tools, such as DAVID, Gene Ontology, and Enrichr. These tests are useful for identifying biological processes and pathways that are associated with a set of genes or genomic regions, which can provide insights into the underlying mechanisms of a disease or condition.
+
+
+
+
+
+
