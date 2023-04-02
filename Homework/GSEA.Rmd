@@ -1,0 +1,189 @@
+---
+title: "BCB420_Homework_GSEA"
+author: "Mingzheng liu"
+date: "28/03/2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '2'
+  html_notebook:
+    toc: yes
+    toc_depth: 2
+always_allow_html: yes
+---
+```{r}
+#install required R and bioconductor packages
+tryCatch(expr = { library("RCurl")}, 
+         error = function(e) {  install.packages("RCurl")}, 
+         finally = library("RCurl"))
+
+#use library
+#make sure biocManager is installed
+tryCatch(expr = { library("BiocManager")}, 
+         error = function(e) { 
+           install.packages("BiocManager")}, 
+         finally = library("BiocManager"))
+tryCatch(expr = { library("ggplot2")}, 
+         error = function(e) { install.packages("ggplot2")}, 
+         finally = library("ggplot2"))
+#use easy cyRest library to communicate with cytoscape.
+tryCatch(expr = { library("RCy3")}, 
+         error = function(e) { BiocManager::install("RCy3")}, 
+         finally = library("RCy3"))
+```
+
+```{r}
+url <- "https://raw.githubusercontent.com/bcb420-2020/Student_Wiki/master/MesenvsImmuno_RNASeq_ranks.rnk"
+filename <- "MesenvsImmuno_RNASeq_ranks.rnk"
+download.file(url, destfile = filename)
+
+data_dir <- paste0(getwd(), "/")
+ gmt_url = "http://download.baderlab.org/EM_Genesets/current_release/Human/symbol/"
+ # list all the files on the server
+ filenames = RCurl::getURL(gmt_url)
+ tc = textConnection(filenames)
+ contents = readLines(tc)
+ close(tc)
+ # get the gmt that has all the pathways and does not include terms inferred
+ # from electronic annotations(IEA) start with gmt file that has pathways only
+ rx = gregexpr("(?<=<a href=\")(.*.GOBP_AllPathways_no_GO_iea.*.)(.gmt)(?=\">)", contents,
+              perl = TRUE)
+ gmt_file = unlist(regmatches(contents, rx))
+ dest_gmt_file <- "/Users/ming/Documents/BCB420/Mingzheng_Liu/Homework/Human_GOBP_AllPathways_no_GO_iea_March_02_2023_symbol.gmt"
+ download.file(paste(gmt_url, gmt_file, sep = ""), destfile = dest_gmt_file)
+```
+
+
+```{r}
+#path to GSEA jar 
+# In order to run GSEA automatically you need to speciry the path to the gsea jar file.
+# With the latest release of gsea (4.0.2) they no longer release a bundled jar
+# and instead release a scriptted way to launch the gsea client.
+# specify the java version as 11 if you are using the later version gsea
+# the gsea_jar also needs to be the full path to the GSEA 4.0.2 directory that you
+# downloaded from GSEA. for example (/Users/johnsmith/GSEA_4.0.2/gsea-cli.sh)
+gsea_jar <- "~/Documents/BCB420/Mingzheng_Liu/Homework/GSEA_4.3.2/gsea-cli.sh"
+java_version <- 11
+#Gsea takes a long time to run.  If you have already run GSEA manually or previously there is no need to re-run GSEA.  Make sure the 
+# gsea results are in the current directory and the notebook will be able to find them and use them.
+run_gsea = FALSE # set back from TRUE to FALSE once I have run gsea
+#navigate to the directory where you put the downloaded protocol files.
+working_dir <- "~/Documents/BCB420/Mingzheng_Liu/Homework"
+# leave blank if you want the notebook to discover the gsea directory for itself
+#gsea_directory = paste(working_dir,"Mesen_vs_Immuno.GseaPreranked.1497635459262",sep="/") 
+gsea_directory = ""
+analysis_name <- "Mesen_vs_Immuno"
+rnk_file <- "MesenvsImmuno_RNASeq_ranks.rnk"
+expression_file <- "MesenvsImmuno_RNASeq_expression.gct"
+classes_file <- "MesenvsImmuno_RNASeq_classes.cls"
+```
+
+# Run GSEA
+```{r}
+#if you are using GSEA 4.0.2 then you need to use the command script
+# as opposed to launching GSEA through java. 
+# in the later version of GSEA command line implementation the following 
+# parameters are no longer valid: -permute gene_set,  -num 100, -gui false
+# no longer need to specify the whole path to the GseaPreranked package
+if(run_gsea && java_version == "11"){
+  command <- paste("",gsea_jar,  "GSEAPreRanked -gmx", dest_gmt_file, "-rnk" ,file.path(working_dir,rnk_file), "-collapse false -nperm 1000 -scoring_scheme weighted -rpt_label ",analysis_name,"  -plot_top_x 20 -rnd_seed 12345  -set_max 200 -set_min 15 -zip_report false -out" ,working_dir, " > gsea_output.txt",sep=" ")
+  system(command)
+} else if (run_gsea) {
+  command <- paste("java  -Xmx1G -cp",gsea_jar,  "xtools.gsea.GseaPreranked -gmx", dest_gmt_file, "-rnk" ,file.path(working_dir,rnk_file), "-collapse false -nperm 1000 -permute gene_set -scoring_scheme weighted -rpt_label ",analysis_name,"  -num 100 -plot_top_x 20 -rnd_seed 12345  -set_max 200 -set_min 15 -zip_report false -out" ,working_dir, "-gui false > gsea_output.txt",sep=" ")
+  system(command)
+}
+```
+
+# Get the name of the GSEA output directory
+```{r}
+if(gsea_directory == ""){
+  gsea_directories <- list.files(path = working_dir, pattern = "\\.GseaPreranked")
+  #get the details on the files
+  details = file.info(file.path(getwd(),working_dir,gsea_directories))
+  #order according to newest to oldest
+  details = details[with(details, order(as.POSIXct(mtime),decreasing = TRUE)), ]
+  #use the newest file:
+  gsea_output_dir <- row.names(details)[1]
+} else {
+  gsea_output_dir <- gsea_directory
+}
+```
+
+# Launch Cytoscape
+```{r}
+# install.packages("RCy3")
+library(RCy3)
+cytoscapePing()
+cytoscapeVersionInfo()
+```
+
+# Create an Enrichment map
+```{r}
+#defined threshold for GSEA enrichments (need to be strings for cyrest call)
+pvalue_gsea_threshold <- 1
+qvalue_gsea_threshold <- 0.01
+similarity_threshold <- "0.375"
+similarity_metric = "COMBINED"
+cur_model_name <- analysis_name
+# path to GSEA result
+gsea_results_path <- file.path(gsea_output_dir,"edb")
+gsea_results_filename <- file.path(gsea_results_path,"results.edb")
+gsea_results_filename <- "/Users/ming/Documents/BCB420/Mingzheng_Liu/Homework/Mesen_vs_Immuno.GseaPreranked.1680417983785/edb/results.edb"
+# path the baderlab dataset used for GSEA 
+gmt_gsea_file <- "/Users/ming/Documents/BCB420/Mingzheng_Liu/Homework/Human_GOBP_AllPathways_no_GO_iea_March_02_2023_symbol.gmt"
+# path to the rank file
+gsea_ranks_file <- file.path(gsea_results_path,list.files(gsea_results_path,pattern=".rnk"))
+gsea_ranks_file <- "/Users/ming/Documents/BCB420/Mingzheng_Liu/Homework/MesenvsImmuno_RNASeq_ranks.rnk"
+#######################################
+#create EM
+current_network_name <- paste(cur_model_name,pvalue_gsea_threshold,qvalue_gsea_threshold,sep="_")
+
+# EM command
+em_command = paste('enrichmentmap build analysisType="gsea" gmtFile=',gmt_gsea_file,
+                   'pvalue=',pvalue_gsea_threshold, 'qvalue=',qvalue_gsea_threshold,
+                   'similaritycutoff=',similarity_threshold,
+                   'coefficients=',similarity_metric,'ranksDataset1=', 
+                   gsea_ranks_file,'enrichmentsDataset1=',gsea_results_filename, 
+                   'filterByExpressions=false'
+                   )
+
+response <- commandsGET(em_command)
+current_network_suid <- 0
+#enrichment map command will return the suid of newly created network unless it Failed.  
+#If it failed it will contain the word failed
+if(grepl(pattern="Failed", response)){
+  paste(response)
+} else {
+  current_network_suid <- response
+}
+```
+
+```{r}
+#check to see if the network name is unique
+current_names <- getNetworkList()
+if(current_network_name %in% current_names){
+  #if the name already exists in the network names then put the SUID in front
+  # of the name (this does not work if you put the suid at the end of the name)
+  current_network_name <- paste(current_network_suid,current_network_name,  sep="_")
+}
+
+# response <- renameNetwork(title=current_network_name,
+#                           network = as.numeric(current_network_suid),base.url = base.url)
+```
+
+# Get a screen shot of the initial network.
+```{r}
+fitContent()
+output_network_file <- file.path(getwd(),"initial_screenshot_network.png")
+if(file.exists(output_network_file)){
+  #cytoscape hangs waiting for user response if file already exists.  Remove it first
+  response <- file.remove(output_network_file)
+} 
+response <- exportImage(output_network_file, type = "png")
+```
+
+```{r}
+htmltools::img(src = knitr::image_uri(output_network_file), 
+               alt = 'Initial Enrichment Map', 
+               style = 'margin:0px auto;display:block')
+```
