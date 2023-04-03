@@ -1,0 +1,227 @@
+---
+title: "BCB420_Assignment3"
+subtitle: "Data set Pathway and Network Analysis"
+author: "Mingzheng liu"
+date: "04/04/2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
+  html_notebook:
+    toc: yes
+    toc_depth: 2
+  pdf_document:
+    fig_caption: yes
+always_allow_html: yes
+---
+## Objective of Assignment 3
+* To take the ranked data that was created in Assignment #2 
+* To perform non-thresholded pathway analysis
+* To summarize and visualize your results using Cytoscape and the Enrichment map pipeline.
+
+# Introduction
+## General Background
+The dataset is derived from genetically engineered Foxd1Cre;Smo(flox/-) house mice and aims to investigate the mRNA content of mutant kidneys to gain a deeper understanding of the molecular mechanisms underlying the developmental defects observed in the kidney. The Hedgehog-GLI pathway, which is responsible for the development and patterning of various tissues and organs, including the kidney, interacts with the transforming growth factor beta (TGF) signaling pathway, another critical regulator of kidney development. Smo, a key component of the Hedgehog-GLI signaling pathway, plays a crucial role in human kidney development and modulates TGF&beta; signaling in the kidney, and its disruption can lead to abnormal kidney development and function. The ultimate goal of understanding the role of Smo in these signaling pathways is to uncover the molecular mechanisms underlying normal kidney development and diseases, which could ultimately lead to the development of new therapeutic strategies for kidney disorders. 
+
+## Previous Work
+In the previous work on the dataset with accession ID GSE103923, an initial processing of the data has been done, including accessing the dataset quality, filtering the low expression gene. The dataset was downloaded in a normalized data with identified as a mixed of HUGO symbol and he Mouse Genome Informatics (MGI) symbol. Hence, a identifier mapping was performed, and no extra normalization was applied. The result of assignment one is a a clean, normalized dataset stored in the root directory as "smo_exp_normalized.txt". The downloaded cleaned annotated dataset with calculated fold change and adjusted p-value is stored in the root directory as "smo_exp_annot.txt"
+* Assignment 1 in htmlViewer can be found [here](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/Assignment1.html)
+In the secound stage, a differential expression analysis is performed on the dataset. The genes were ranked according to differential expression. A thresholded over-representation analysis is performed to highlight dominant themes in the top set of genes. Three sources of annotations, Gene Ontology Biological Process (GO:BP), Reactome (REAC), and WikiPathways (WP) from g:profile are used for this analysis. The organism is specified as “mmusculus”, since the analysis is being performed on mouse genes for simulating human physiology process. The version of the annotation database is the most current version available at the time of running the analysis, as the gost function retrieves annotation data from the g:Profiler web service, which is regularly updated. For all genesets, 107 genesets were return, among which 69 genesets are up-regulated and 31 genesets are down-regulated.
+* Assignment 2 in htmlViewer can be found [here](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/A2_MingzhengLiu.html)
+ 
+## Preparation
+Tools are needed for the GSEA analysis: 
+* Packages used
+```{r Repare packages, message=FALSE, warning=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+library(BiocManager)
+if (!requireNamespace("knitr", quietly = TRUE))
+  install.packages("knitr")
+library(knitr)
+if (!requireNamespace("ggplot2", quietly = TRUE))
+  install.packages("ggplot2")
+library(ggplot2)
+if (!requireNamespace("RCurl", quietly = TRUE)){
+  install.packages("RCurl")}
+library(RCurl)
+if (!requireNamespace("RCy3", quietly = TRUE)){
+  BiocManager::install("RCy3")}
+library(RCy3)
+```
+
+## Prepare dataset from Assignment 2
+###Step 1: Prepare gmt file
+```{r gmt Prepare}
+# Download mouse GO to retrieve the gmt file
+# Since we are using a mouse model, we use mouse GO
+# get the current working directory path
+data_dir <- paste0(getwd(), "/")
+if (!file.exists("Mouse_GO.gmt")) {
+  gmt_url = "http://download.baderlab.org/EM_Genesets/current_release/Mouse/symbol/Mouse_GO_AllPathways_no_GO_iea_March_02_2023_symbol.gmt"
+  download.file(gmt_url, "Mouse_GO.gmt")
+}
+dest_gmt_file <- paste0(data_dir, "Mouse_GO.gmt")
+```
+###Step 2: Prepare rnk file
+```{r rnk Prepare}
+# Since the dataset is pre-normalized with logFC and adjusted p-value
+# We make the rnk file from the cleaned dataset
+
+# Load the differential expression analysis results from previous work
+de_results <- read.table("smo_exp_annot.txt", header=TRUE)
+
+# calculate rank for each gene
+de_results[,"rank"] <- -log(de_results$padj, 10) * sign(de_results$log2FoldChange) 
+de_results <- de_results[order(de_results$rank),]
+
+# Combine the rank, gene IDs
+rnk <- cbind(de_results$id, de_results$rank)
+colnames(rnk) <- c("GeneID", "rank")
+
+# Save the rnk file
+write.table(rnk, file="smo_exp.rnk", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+# Non-thresholded Gene set Enrichment Analysis (GSEA)
+## Configurations for running the GSEA
+```{r GSEA configuring}
+# path to GSEA jar 
+# In order to run GSEA automatically, I need to specify the path to the gsea jar file.
+# gsea jar file is uploaded to the main directory
+# the latest release of gsea (4.0.2) they no longer release a bundled jar
+gsea_jar <- paste0(data_dir,"GSEA_4.3.2/gsea-cli.sh")
+
+run_gsea = TRUE # set back from TRUE to FALSE once I have run gsea
+
+# navigate to the directory where you put the downloaded protocol files.
+working_dir <- getwd()
+
+# leave blank for the notebook to discover the gsea directory for itself
+gsea_directory = ""
+analysis_name <- "Smo_KO_vs_WT"
+
+# The ranked file from assignment 2 is uploaded in the current directory named "smo_exp.rnk"
+rnk_file <- "smo_exp.rnk"
+expression_file <- "smo_RNASeq_expression.gct"
+classes_file <- "smo_RNASeq_classes.cls"
+```
+
+## Run GSEA
+```{r run GSEA, message=FALSE, warning=FALSE}
+# since we using gsea 4.3.2
+if(run_gsea){
+  command <- paste(
+    "",gsea_jar,  
+    "GSEAPreRanked -gmx", dest_gmt_file, 
+    "-rnk" ,file.path(working_dir,rnk_file), 
+    "-collapse false -nperm 1000 -scoring_scheme weighted -rpt_label ",analysis_name,
+    "  -plot_top_x 20 -rnd_seed 12345  -set_max 200 -set_min 15 -zip_report false -out" ,working_dir, 
+    " > gsea_output.txt",sep=" ")
+  system(command)
+}
+```
+
+## Get the name of the GSEA output directory
+```{r}
+# find the gsea_directory
+if(gsea_directory == ""){
+  gsea_directories <- list.files(path = working_dir, pattern = "\\.GseaPreranked")
+  #get the details on the files
+  details = file.info(file.path(getwd(),gsea_directories))
+  #order according to newest to oldest
+  details = details[with(details, order(as.POSIXct(mtime),decreasing = TRUE)), ]
+  #use the newest file:
+  gsea_output_dir <- row.names(details)[1]
+} 
+```
+
+# Visualize your Gene set Enrichment Analysis in Cytoscape
+# Launch Cytoscape
+```{r}
+cytoscapePing()
+cytoscapeVersionInfo()
+```
+
+# Create an Enrichment map
+```{r EM set-up}
+# Set up all parameters in the em command
+# path the baderlab dataset used for GSEA
+gmt_gsea_file <-  dest_gmt_file
+# defined threshold for GSEA enrichments (need to be strings for cyrest call)
+pvalue_gsea_threshold <- "1"
+qvalue_gsea_threshold <- "0.05"
+similarity_threshold <- "0.375"
+similarity_metric = "COMBINED" 
+cur_model_name <- analysis_name
+# path to GSEA result
+gsea_results_path <- file.path(gsea_output_dir,"edb")
+gsea_results_filename <- file.path(gsea_results_path,"results.edb")
+# path to the rank file
+gsea_ranks_file <- file.path(gsea_results_path,list.files(gsea_results_path,pattern=".rnk"))
+```
+
+```{r EM Creation}
+
+#create EM
+current_network_name <- paste(cur_model_name,pvalue_gsea_threshold,qvalue_gsea_threshold,sep="_")
+
+# EM command
+em_command = paste('enrichmentmap build analysisType="gsea" gmtFile=', gmt_gsea_file,
+                   'pvalue=',pvalue_gsea_threshold, 'qvalue=',qvalue_gsea_threshold,
+                   'similaritycutoff=',similarity_threshold,
+                   'coefficients=',similarity_metric,'ranksDataset1=', 
+                   gsea_ranks_file,'enrichmentsDataset1=',gsea_results_filename, 
+                   'filterByExpressions=false'
+                   )
+
+response <- commandsGET(em_command)
+current_network_suid <- 0
+#enrichment map command will return the suid of newly created network unless it Failed.  
+#If it failed it will contain the word failed
+if(grepl(pattern="Failed", response)){
+  paste(response)
+} else {
+  current_network_suid <- response
+}
+```
+
+```{r network nameing}
+#check to see if the network name is unique
+current_names <- getNetworkList()
+if(current_network_name %in% current_names){
+  #if the name already exists in the network names then put the SUID in front
+  # of the name (this does not work if you put the suid at the end of the name)
+  current_network_name <- paste(current_network_suid,current_network_name,  sep="_")
+}
+```
+
+# Get a screen shot of the initial network.
+```{r EM screenshot}
+fitContent()
+output_network_file <- file.path(getwd(),"initial_screenshot_network.png")
+if(file.exists(output_network_file)){
+  #cytoscape hangs waiting for user response if file already exists.  Remove it first
+  response <- file.remove(output_network_file)
+} 
+response <- exportImage(output_network_file, type = "png")
+```
+
+```{r image display}
+htmltools::img(src = knitr::image_uri(output_network_file), 
+               alt = 'Initial Enrichment Map', 
+               style = 'margin:0px auto;display:block')
+```
+# Interpretation and detailed view of results
+The most important aspect of the analysis is relating your results back to the initial data and question.
+
+Do the enrichment results support conclusions or mechanism discussed in the original paper? How do these results differ from the results you got from Assignment #2 thresholded methods
+Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your result?
+Using your networks and results from the previous section add one of the following:
+
+Add a post analysis to your main network using specific transcription factors, microRNAs or drugs. Include the reason why you chose the specific miRs, TFs or drugs (i.e publications indicating that they might be related to your model). What does this post analysis show?
+Choose a specific pathway or theme to investigate in more detail. Why did you choose this pathway or theme? Show the pathway or theme as a gene network or as a pathway diagram. Annotate the network or pathway with your original log fold expression values and p-values to show how it is effected in your model. (Hint: if the theme or pathway is not from database that has detailed mechanistic information like Reactome you can use apps like GeneMANIA or String to build the the interaction network.)
+Sometimes the most interesting information is the gene that has no information. In this type of pathway analysis we can only discover what we have already described previously in the literature or pathway databases. Often pathways found in one disease are applicable to other diseases so this technique can be very helpful. It is important to highlight any genes that are significantly differentially expressed in your model but are not annotated to any pathways. We refer to this set of genes as the dark matter.
+Include a heatmap of any significant genes that are not annotated to any of the pathways returned in the enrichment analysis.
+Include a heatmap of any significant genes that are not annotated to any pathways in entire set of pathways used for the analysis.
