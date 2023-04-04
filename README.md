@@ -18,7 +18,7 @@ repository for bcb420 for mingzheng Liu
 - Associated Jounral Entries:
   - [Assignment 2 Journal](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Assignment-%232-Differential-Gene-expression-and-Preliminary-ORA)
   - [g:profiler](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Journal-%236:-G:Profiler)
-  - [Rmd tips](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Journal-%237:-Rmd-Tips)
+  - [Rmd tips & ORA](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Journal-%237:-Rmd-Tips)
 
  Assignment 3
 - [Assignment 3 R Notebook](https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/A3_MingzhengLiu.Rmd)
