@@ -26,4 +26,4 @@ repository for bcb420 for mingzheng Liu
 - [Assignment 3 OnlineBrowser](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/A3_MingzhengLiu.html)
 - Associated Jounral Entries:
   - [Assignment 3 Journal](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Assignment-%233:-Data-set-Pathway-and-Network-Analysis)
-  - [GSEA](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Journal-%238:-GSEA-analysis)
+  - [GSEA & Cytoscape](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Journal-%238:-GSEA-&-Cytoscape)
