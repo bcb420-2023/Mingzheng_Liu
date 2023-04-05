@@ -9,7 +9,7 @@ repository for bcb420 for mingzheng Liu
 - Associated Jounral Entries:
   - [Assignment 1 Journal](https://github.com/bcb420-2023/Mingzheng_Liu/wiki/Assignment-%231-Data-Selection)
   - [Lec 3: Data selection](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/LecNotes/Lec3Notes.html)
-  - [Lec 4&5: Normalization & ID Mapping](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/LecNotes/Lec4&5Notes.html)
+  - [Lec 4&5: Normalization & ID Mapping](https://htmlpreview.github.io/?https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/LecNotes/Lec4-5Notes.html)
 
  Assignment 2
 - [Assignment 2 R Notebook](https://github.com/bcb420-2023/Mingzheng_Liu/blob/main/A2_MingzhengLiu.Rmd)
